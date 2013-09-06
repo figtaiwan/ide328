@@ -1,0 +1,4416 @@
+
+AVRASM ver. 2.1.42  D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm Tue Mar 05 19:45:36 2013
+
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(4): Including file 'C:\Program Files (x86)\Atmel\AVR Tools\AvrAssembler2\Appnotes\m328Pdef.inc'
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2989): warning: Register r20 already defined by the .DEF directive
+                 
+                 
+                 
+                 .list
+                 
+                 ;===============================================================
+                 ;   328eFORTH DEV 0.7 2012/10/30
+                 ;       keep whole Arduino boot loader
+                 ;       reamin only ERASE, WRITE, READ in boot loader area
+                 ;		all other words moved out
+                 ;		so that we can directly use .bat to burn .hex
+                 ;	328eFORTH DEV 0.6
+                 ;		INTERRUPT TESTING
+                 ;   328eFORTH DEV 0.5
+                 ;		'CN find cfa and nfa
+                 ;   328eFORTH DEV 0.4
+                 ;       ALLOW_BOOT   2012/8/30
+                 ;   328eFORTH DEV 0.3
+                 ;       ERR_HANDLING 2012/8/23       
+                 ;   328eForth DEV 0.1, Albert, 2012/5/2
+                 ;		Allow defining chinese words 
+                 ;	328eForth v2.20, Chen-Hanson Ting, July 2011
+                 ;		Fix error, quit, 2/ and ?stack
+                 ;
+                 ;	328eForth v2.10, Chen-Hanson Ting, March 2011
+                 ;	Adapted from 
+                 ;		86se4th.asm by Richard Haskell 
+                 ;		Amforth by Matthias Trute
+                 ;	Assembled with AVR Studio 4 from Atmel
+                 ;	-Subroutine threaded model
+                 ;	-Uniform byte addressing for flash, RAM and registers
+                 ;	-Ping-pong block buffers for optimal flash programming
+                 ;	-FORTH interpreter & tools are in NRWW flash
+                 ;	-FORTH compiler & user extension are in RWW flash
+                 ;	-No interrupt, no multitasking 
+                 ;	-turnkey capability
+                 ;	-Case insensitive
+                 ;	-9600 baud, 1 start, 8 data, no parity, 1 stop bit
+                 ;	ANS FORTH compatible, but not compliant.
+                 ;
+                 ;	Subroutine threaded eForth; Version. 1.0, 1991 
+                 ;	by Richard E. Haskell
+                 ;	Dept. of Computer Science and Engineering
+                 ;	Oakland University
+                 ;	Rochester, Michigan 48309
+                 ;
+                 ;	eForth 1.0 by Bill Muench and C. H. Ting, 1990
+                 ;	Much of the code is derived from the following sources:
+                 ;	8086 figForth by Thomas Newman, 1981 and Joe smith, 1983
+                 ;	aFORTH by John Rible
+                 ;	bFORTH by Bill Muench
+                 ;
+                 ;	The goal of this implementation is to provide a simple eForth Model
+                 ;	which can be ported easily to many 8, 16, 24 and 32 bit CPU's.
+                 ;	The following attributes make it suitable for CPU's of the '90:
+                 ;
+                 ;	small machine dependent kernel and portable high level code
+                 ;	subroutine threaded code
+                 ;	single code dictionaries
+                 ;	each word record has a link field, a name field and a code field
+                 ;	simple terminal and file interface to host computer
+                 ;	aligned with the proposed ANS Forth Standard
+                 ;	easy upgrade path to optimize for specific CPU
+                 ;	easy mixing of Forth and assembly language
+                 ;	all assembly language tools can be used directly
+                 ;
+                 ;	You are invited to implement this Model on your favorite CPU and
+                 ;	contribute it to the eForth Library for public use. You may use
+                 ;	a portable implementation to advertise more sophisticated and
+                 ;	optimized version for commercial purposes. However, you are
+                 ;	expected to implement the Model faithfully. The eForth Working
+                 ;	Group reserves the right to reject implementation which deviates
+                 ;	significantly from this Model.
+                 ;
+                 ;	Representing the eForth Working Group in the Silicon Valley FIG Chapter.
+                 ;	Send contributions to:
+                 ;
+                 ;	Dr. Chen-Hanson Ting
+                 ;	156 14th Avenue
+                 ;	San Mateo, CA 94402
+                 ;	(650) 571-7639
+                 ;	ting@offete.com
+                 ;
+                 ;   Ver 0.7 保留Arduino Bootloader (Byeaddress:7800 ~7FA0 , WordAddress: $3C00 ~ $3FD0
+                 ;   原有 328eForth : $3800 ~ $3fc3 。要把$3f8a ~$3fc3 移至$3FD0 , 要去掉Name Field, Link Field($C words) , 爽哥，諶老師，阿貴，毛翔 2012-10-30
+                 ;===============================================================
+                 
+                 ;; Version control
+                 
+                 .EQU	VER	=	2	;major release version
+                 .EQU	EXT	=	2	;minor extension
+                 
+                 ;; Constants
+                 
+                 .EQU	COMPO	=	$040	;lexicon compile only bit
+                 .EQU	IMEDD	=	$080	;lexicon immediate bit
+                 
+                 .EQU	BASEE	=	16		;default radix
+                 
+                 .EQU	BKSPP	=	8		;back space
+                 .EQU	LF		=	10		;line feed
+                 .EQU	CRR		=	13		;carriage return
+                 
+                 .EQU	RETT	=	$9508
+                 .EQU	CALLL	=	$940E
+                 
+                 ;; Memory allocation for ATmega328P, all byte addresses
+                 ;
+                 ;	Flash memory
+                 ;	$0		Reset and interrupt vectors, RWW section
+                 ;	$100	Initial values for variables
+                 ;	$200	Start of compiler and user words
+                 ;	$7000	Start of interpreter words, NRWW section
+                 ;	$7FFF	End of flash memory
+                 ;
+                 ;	RAM memory
+                 ;	$0		CPU and I/O registers
+                 ;	$100	Variables
+                 ;	$120	Free RAM memory
+                 ;	$160	Initial PAD
+                 ;	$4F0	Top of data stack
+                 ;	$700	Terminal input buffer
+                 ;	$7F0	Top of return stack
+                 ;	$800	Flash buffer 0
+                 ;	$880	Flash buffer 1
+                 ;	$8FF	End of RAM memory
+                 
+                 .EQU	RPP		=	$7F0	;start of return stack (RP0)
+                 .EQU	TIBB	=	$700	;terminal input buffer (TIB)
+                 .EQU	UPP		=	$100	;start of user area (UP0)
+                 .EQU	SPP		=	$6F0	;start of data stack (SP0)
+                 
+                 ;;	Flash programmming
+                 
+                 .EQU	BUF0	=	$800
+                 .EQU	BUF1	=	$880
+                 .EQU	NEWER	=	$11C	;flash pointer
+                 .EQU	OLDER	=	$11E	;flash pointer
+                 ; buffer pointer word format:	dirty,page_addr,cell_addr,buf?
+                 
+                 ;; Initialize assembly variable
+                 
+                 .SET _LINK		=	0		;init a null link
+                 
+                 ;	Compile a code definition header.
+                 
+                 .MACRO	CODE				;;LEX,NAME 
+                 	.DW		_LINK*2			;;link pointer
+                 	.SET _LINK	=	pc		;;link points to a name string
+                 	.DB		@0,@1
+                 	.ENDM
+                 
+                 ;	Colon header is identical to code header.
+                 
+                 .MACRO	COLON				;;LEX,NAME,LABEL
+                 	.DW		_LINK*2			;;link pointer
+                 	.SET _LINK	=	pc		;;link points to a name string
+                 	.DB		@0,@1
+                 	.ENDM
+                 
+                 ;; Macros defined by amForth
+                 
+                 .DEF zerol = r2
+                 .DEF zeroh = r3
+                 .DEF temp4 = r14
+                 .DEF temp5 = r15
+                 .DEF temp0 = r16
+                 .DEF temp1 = r17
+                 .DEF temp2 = r18
+                 .DEF temp3 = r19
+                 .DEF temp6 = r20
+                 .DEF temp7 = r21
+                 .DEF tosl = r24
+                 .DEF tosh = r25
+                 
+                 .macro loadtos
+                 	ld tosl, Y+
+                 	ld tosh, Y+
+                 .endmacro
+                 
+                 .macro savetos
+                 	st -Y, tosh
+                 	st -Y, tosl
+                 .endmacro
+                 
+                 .macro in_
+                 .if (@1 < $40)
+                   	in @0,@1
+                 .else
+                   	lds @0,@1
+                 .endif
+                 .endmacro
+                 
+                 .macro out_
+                 .if (@0 < $40)
+                   	out @0,@1
+                 .else
+                   	sts @0,@1
+                 .endif
+                 .endmacro
+                 
+                 .macro readflashcell
+                 	lsl zl
+                 	rol zh
+                 	lpm @0, Z+
+                 	lpm @1, Z+
+                 .endmacro
+                 
+                 .macro writeflashcell
+                 	lsl zl
+                 	rol zh
+                 .endmacro
+                 
+                 ;; Main entry points and COLD start data
+                 
+                 ; 首先在一般的中斷向量位址上，寫入RCALL指令(1 word長)。因為空間上只允許放入這麼短的指令。(每項只能放 2 words)
+                 ; 其次在後面丁陳老師留的$00~$7F(word address, = byte address $00~$FF) 共128 words = 256 bytes 範圍內放中斷程式導引機制。
+                 
+                 ; ???
+                 ; CALL 先指向 QUIT，日後再把寫好的中斷服務字用高階字 ISR_ASSIGN 塞入，取代QUIT即可。
+                 ;  CALL 的OP CODE為1 word長，不必換。只要換它的operand(也是1 word長)即位址就好。
+                 
+                 ;; Main entry points and COLD start data
+                 
+                 	.CSEG
+                 	.ORG	0
+                 
+                 ;  建 INTERUPT VECTOR CALL表 ( 共 26 interrupt, 佔2*26 words =52 words = 104 bytes ) ( 52 =ox34 words )
+                 
+                 	
+                 
+000000 940c 0100 	JMP		ORIG		;1, RESET
+                 
+                 
+000002 d031      	RCALL		ISR_HEAD	;2, INT0
+000003 d048      		RCALL		ISR0
+000004 d02f      	RCALL		ISR_HEAD	;3, INT1
+000005 d046      		RCALL		ISR0
+000006 d02d      	RCALL		ISR_HEAD	;4
+000007 d044      		RCALL		ISR0
+000008 d02b      	RCALL		ISR_HEAD	;5
+000009 d042      		RCALL		ISR0
+00000a d029      	RCALL		ISR_HEAD	;6
+00000b d040      		RCALL		ISR0
+00000c d027      	RCALL		ISR_HEAD	;7
+00000d d03e      		RCALL		ISR0
+00000e d025      	RCALL		ISR_HEAD	;8
+00000f d03c      		RCALL		ISR0
+000010 d023      	RCALL		ISR_HEAD	;9
+000011 d03a      		RCALL		ISR0
+000012 d021      	RCALL		ISR_HEAD	;10
+000013 d038      		RCALL		ISR0
+000014 d01f      	RCALL		ISR_HEAD    ;11
+000015 d036      		RCALL		ISR0
+000016 d01d      	RCALL		ISR_HEAD	;12
+000017 d034      		RCALL		ISR0
+000018 d01b      	RCALL		ISR_HEAD	;13
+000019 d032      		RCALL		ISR0
+00001a d019      	RCALL		ISR_HEAD	;14
+00001b d030      		RCALL		ISR0
+00001c d017      	RCALL		ISR_HEAD	;15
+00001d d02e      		RCALL		ISR0
+00001e d015      	RCALL		ISR_HEAD	;16
+00001f d02c      		RCALL		ISR0
+000020 d013      	RCALL		ISR_HEAD	;17
+000021 d02a      		RCALL		ISR0
+000022 d011      	RCALL		ISR_HEAD	;18
+000023 d028      		RCALL		ISR0
+000024 d00f      	RCALL		ISR_HEAD	;19, RX
+000025 d026      		RCALL		ISR0
+000026 d00d      	RCALL		ISR_HEAD	;20
+000027 d024      		RCALL		ISR0
+000028 d00b      	RCALL		ISR_HEAD	;21
+000029 d022      		RCALL		ISR0
+00002a d009      	RCALL		ISR_HEAD	;22
+00002b d020      		RCALL		ISR0
+00002c d007      	RCALL		ISR_HEAD	;23
+00002d d01e      		RCALL		ISR0
+00002e d005      	RCALL		ISR_HEAD	;24
+00002f d01c      		RCALL		ISR0
+000030 d003      	RCALL		ISR_HEAD	;25
+000031 d01a      		RCALL		ISR0
+000032 d001      	RCALL		ISR_HEAD	;26
+000033 d018      		RCALL		ISR0
+                 
+                 
+                 ; 	.ORG	$35  ;   << 請跟在  INTERUPT VECTOR CALL  後 >>
+                 ;      
+                 ISR_HEAD:
+                      
+                 	; save r4 to data stack
+000034 924a      	  st -Y, r4
+                 	; save SREG to data stack
+000035 b64f      	  IN r4, SREG
+000036 924a      	  st -Y, r4
+                 	; save z to data stack
+000037 93ea      	  st -Y, zl
+000038 93fa      	  st -Y, zh
+                 	; pop return stack to z
+000039 91ff      	  pop zh
+00003a 91ef      	  pop zl
+                 	; change word add. to byte add. ( *2)
+00003b 0fee      	  lsl zl
+00003c 1fff      	  rol zh
+                 	; get data on add. (through r4) and push to return stack
+00003d 9045      	  lpm r4, Z+
+00003e 924f      	  push r4
+00003f 9045      	  lpm r4, Z+
+000040 924f      	  push r4
+                 	 ; CALL ISR0
+                 	; recover z, r4, SREG
+000041 91f9      	  ld zh, Y+
+000042 91e9      	  ld zl, Y+
+000043 9049      	  ld r4, Y+
+000044 be4f      	  OUT SREG, r4
+000045 9049      	  ld r4, Y+
+                 	
+                 	; return from interrupt
+000046 940c 0072 	  JMP DBG ; 結束中斷急務，返回forth處理中斷程式。
+                 
+                 
+                 ; = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+                 
+                 	; .ORG	$3fe0
+                 
+                 ;  ISR0
+                 	; ISR0 ( -- )
+                 	; 
+000048 0000
+000049 4904
+00004a 5253
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(330): macro 'COLON' called here
+00004b 0030      	COLON 4,"ISR0"
+                 	ISR0:
+00004c 940e 0553 	CALL HEX
+00004e 940e 0268 	CALL RFROM
+000050 940e 0268 	CALL RFROM
+000052 940e 036e 	CALL DDUP
+000054 940e 0282 	CALL TOR
+000056 940e 0282 	CALL TOR
+000058 940e 0636 	CALL DOT
+00005a 940e 0636 	CALL DOT
+00005c 940e 05f9 	CALL CR
+00005e 940e 0851 	CALL DOTS 
+000060 940e 05f9 	CALL CR 
+                 
+000062 940e 0481 	 CALL DEPTH 
+000064 940e 0636 	 CALL DOT 
+000066 940e 0613 	 CALL	DOTQP 	;initialize I/O
+000068 200a
+000069 4e49
+00006a 5320
+00006b 4154
+00006c 4b43
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(347): warning: .cseg .db misalignment - padding zero byte
+00006d 0021      	.DB		10," IN STACK!"	;model
+00006e 9518      	 RETI
+                 
+00006f 0092
+000070 4403
+000071 4742      	 COLON 3,"DBG"
+                 	 DBG:
+000072 940e 0274 	 CALL RAT 
+000074 9518      	 RETI
+                 	
+                 
+                 
+                 
+                 	;JMP 
+                  
+                 	
+                 ;	COLON 4,"ISR0"
+                 ;	ISR0:
+                 ;	CALL HEX
+                 ;	CALL RAT
+                 ;	CALL DOT
+                 	
+                 ;	RCALL	CR
+                 ;	RCALL	DOTQP 	;initialize I/O
+                 ;	.DB		8,"INTERUPT"	;model
+                 
+                 ;	JMP QUIT 
+                 ; 建  INTERUPT VECTOR CALL 表 ，塞入QUIT 
+                 ;                                                              或印出RETURN STACK 值以標示VECTOR
+                 
+                 
+                 
+                 	.ORG	$80		;byte address $100, copy to ram on boot, 
+                 					;saved from ram for turnkey system
+                 	
+                 UZERO:	
+000080 110e      	.DW		HI*2	;'BOOT
+000081 0000      	.DW		0		;reserved
+000082 0010      	.DW		BASEE	;BASE
+000083 0000      	.DW		0		;tmp
+000084 0000      	.DW		0		;SPAN
+000085 0000      	.DW		0		;>IN
+000086 0000      	.DW		0		;#TIB
+000087 0700      	.DW		TIBB	;TIB
+000088 0f64      	.DW		INTER*2	;'EVAL
+000089 0000      	.DW		0		;HLD
+00008a 1644      	.DW		LASTN	;CONTEXT pointer
+00008b 169c      	.DW		CTOP	;CP
+00008c 0140      	.DW		DTOP	;DP
+00008d 1644      	.DW		LASTN	;LAST
+00008e 6f00      	.DW		$6F00	;PTR0 to BUF0
+00008f 6f81      	.DW		$6F81	;PTR1 to BUF1
+                 ULAST:
+                 
+                 ;;	.ORG	$3800	;byte address $7000
+                 	.ORG	$100	;byte address $7000
+                 ORIG:	
+000100 b6a4      	in_ 	r10, MCUSR
+000101 24bb      	clr 	r11
+000102 2422      	clr 	zerol
+000103 2433      	clr 	zeroh
+000104 be24      	out_ 	MCUSR, zerol
+                 	; init return stack pointer
+000105 efa0      	ldi 	xl,low(RPP)
+000106 bfad      	out_ 	SPL,xl
+000107 e0b7      	ldi 	xh,high(RPP)
+000108 bfbe      	out_ 	SPH,xh
+                 	; init parameter stack pointer
+000109 efc0      	ldi 	yl,low(SPP)
+00010a e0d6      	ldi 	yh,high(SPP)
+                 	; jump to Forth starting word
+00010b 940c 089d 	jmp 	COLD
+                 
+                 ;; Device dependent I/O
+                 
+                 ;   ?RX	( -- c T | F )
+                 ;	Return input character and true, or a false if no input.
+                 
+00010d 00e0
+00010e 3f04
+00010f 454b
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(423): macro 'CODE' called here
+000110 0059      	CODE	4,"?KEY"
+                 QRX:
+                 QKEY:
+000111 939a
+000112 938a      	savetos
+000113 2788      	clr 	tosl
+000114 2799      	clr 	tosh
+000115 01c1      	movw	tosl,zerol
+000116 91a0 00c0 	in_		xl,UCSR0A
+000118 ffa7      	sbrs	xl,7
+000119 9508      	ret
+00011a 9180 00c6 	in_		tosl,UDR0
+00011c 939a
+00011d 938a      	savetos
+00011e ef8f      	ser		tosl
+00011f ef9f      	ser		tosh
+000120 9508      	ret
+                 
+                 ;   TX!	( c -- )
+                 ;	Send character c to the output device.
+                 
+000121 021c
+000122 4504
+000123 494d
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(442): macro 'CODE' called here
+000124 0054      	CODE	4,"EMIT"
+                 EMIT:
+                 TXSTO:	
+000125 91a0 00c0 	in_		xl,UCSR0A
+000127 ffa5      	sbrs	xl,5
+000128 cffc      	rJMP	TXSTO
+000129 9380 00c6 	out_	UDR0,tosl
+00012b 9189
+00012c 9199      	loadtos
+00012d 9508      	ret
+                 
+                 ;   !IO	( -- )
+                 ;	Initialize the serial I/O devices.
+                 
+                 ;	CODE	3,"!IO"
+                 STOIO:
+00012e e3a3      	ldi		xl,$33	;19200 baud
+                 ;	ldi		xl,$66	;9600 baud
+00012f 93a0 00c4 	out_	UBRR0L,xl
+000131 27aa      	clr		xl
+000132 93a0 00c5 	out_	UBRR0H,xl
+000134 e1a8      	ldi		xl,$18	;enable TX and RX
+000135 93a0 00c1 	out_	UCSR0B,xl
+000137 e0a6      	ldi		xl,6	;8 data bits
+000138 93a0 00c2 	out_	UCSR0C,xl
+00013a 9508      	RET
+                 
+                 ;; The kernel
+                 
+                 ;   doLIT	( -- w )
+                 ;	Push an inline literal.
+                 
+                 ;	CODE	COMPO+5,"doLIT"
+                 DOLIT:
+00013b 939a
+00013c 938a      	savetos
+00013d 91ff      	pop		zh
+00013e 91ef      	pop		zl
+00013f 0fee
+000140 1fff
+000141 9185
+000142 9195      	readflashcell tosl,tosh
+000143 95f7      	ror		zh
+000144 95e7      	ror		zl
+000145 93ef      	push	zl
+000146 93ff      	push	zh
+000147 9508      	ret
+                 
+                 ;   next	( -- )
+                 ;	Run time code for the single index loop.
+                 
+                 ;	CODE	COMPO+4,"next"
+                 DONXT:
+000148 91ff      	POP		zh	;ret addr
+000149 91ef      	POP		zl	;
+00014a 91bf      	pop		xh	;count
+00014b 91af      	pop		xl
+00014c 9711      	sbiw	xl, 1
+00014d f424      	brge	NEXT1
+00014e 9631      	adiw	zl,1
+00014f 93ef      	push	zl
+000150 93ff      	push	zh
+000151 9508      	ret
+                 NEXT1:	
+000152 93af      	push	xl	;push count back
+000153 93bf      	push	xh	
+000154 0fee
+000155 1fff
+000156 91a5
+000157 91b5      	readflashcell	xl,xh
+000158 93af      	push	xl
+000159 93bf      	push	xh
+00015a 9508      	ret
+                 
+                 ;   ?branch	( f -- )
+                 ;	Branch if flag is zero.
+                 
+                 ;	CODE	COMPO+7,"?branch"
+                 QBRAN:
+00015b 91ff      	pop		zh
+00015c 91ef      	pop		zl
+00015d 2b89      	or		tosl, tosh
+00015e 9189
+00015f 9199      	loadtos
+000160 f031      	breq	BRAN1
+000161 9631      	adiw	zl,1
+000162 93ef      	push	zl
+000163 93ff      	push	zh
+000164 9508      	ret
+                 
+                 ;   branch	( -- )
+                 ;	Branch to an inline address.
+                 
+                 ;	CODE	COMPO+6,"branch"
+                 BRAN:	
+000165 91ff      	pop		zh
+000166 91ef      	pop		zl
+                 BRAN1:	
+000167 0fee
+000168 1fff
+000169 91a5
+00016a 91b5      	readflashcell xl,xh
+00016b 93af      	push	xl
+00016c 93bf      	push	xh
+00016d 9508      	ret
+                 
+                 ;   EXECUTE	( b -- )
+                 ;	Execute the word at ca=b/2.
+                 
+00016e 0244
+00016f 4507
+000170 4558
+000171 5543
+000172 4554      	CODE	7,"EXECUTE"
+                 EXECU:
+000173 9595      	asr		tosh	;b/2
+000174 9587      	ror		tosl
+000175 938f      	push	tosl
+000176 939f      	push	tosh
+000177 9189
+000178 9199      	loadtos
+000179 9508      	ret
+                 
+                 ;   EXIT	( -- )
+                 ;	Terminate current colon word.
+                 
+00017a 02de
+00017b 4504
+00017c 4958
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(551): macro 'CODE' called here
+00017d 0054      	CODE	4,"EXIT"
+                 EXIT:
+00017e 91bf      	pop		xh
+00017f 91af      	pop		xl
+000180 9508      	ret
+                 
+                 ;   !	( w a -- )
+                 ;	Pop the data stack to memory.
+                 
+000181 02f6
+000182 2101      	CODE	1,"!"
+                 STORE:
+000183 01fc      	movw 	zl, tosl
+000184 9189
+000185 9199      	loadtos
+000186 8391      	std 	Z+1, tosh
+000187 8380      	std 	Z+0, tosl
+000188 9189
+000189 9199      	loadtos
+00018a 9508      	RET
+                 
+                 ;   @	( a -- w )
+                 ;	Push memory location to the data stack.
+                 
+00018b 0304
+00018c 4001      	CODE	1,"@"
+                 AT:
+00018d 01fc      	movw 	zl, tosl
+00018e 9181      	ld 		tosl, z+
+00018f 9191      	ld 		tosh, z+
+000190 9508      	RET
+                 
+                 ;   I@	( a -- w )
+                 ;	Push flash memory cell to the data stack.
+                 
+000191 0318
+000192 4902
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(582): macro 'CODE' called here
+000193 0040      	CODE	2,"I@"
+                 IAT:
+000194 dfa6      	RCALL	DOLIT
+000195 011c      	.DW		NEWER
+000196 d035      	RCALL	BUFQ	;n a new?
+000197 dfc3      	RCALL	QBRAN	;if a=new, fetch n in new_buf
+000198 01a2      	.DW		IAT1	;else, a=old?
+000199 dfa1      	RCALL	DOLIT	;n a a old
+00019a 011e      	.DW		OLDER
+00019b d030      	RCALL	BUFQ	;n a old?
+00019c dfbe      	RCALL	QBRAN	;if a=old, fetch n in old_buf
+00019d 01a5      	.DW		IAT2	
+00019e 01fc      	movw 	zl, tosl	;else, fetch from flash
+00019f 9185      	lpm		tosl, z+
+0001a0 9195      	lpm		tosh, z+
+0001a1 9508      	RET
+                 IAT1:
+0001a2 df98      	RCALL	DOLIT
+0001a3 011c      	.DW		NEWER
+0001a4 c002      	RJMP	IAT3
+                 IAT2:
+0001a5 df95      	RCALL	DOLIT
+0001a6 011e      	.DW		OLDER
+                 IAT3:
+0001a7 d02b      	RCALL	BUFAT
+0001a8 cfe4      	RJMP	AT
+                 
+                 ;   IC@	( a -- w )
+                 ;	Push flash memory byte to the data stack.
+                 
+0001a9 0324
+0001aa 4903
+0001ab 4043      	CODE	3,"IC@"
+                 ICAT:
+0001ac df8e      	RCALL	DOLIT
+0001ad 011c      	.DW		NEWER
+0001ae d01d      	RCALL	BUFQ	;n a new?
+0001af dfab      	RCALL	QBRAN	;if a=new, fetch n in new_buf
+0001b0 01ba      	.DW		ICAT1	;else, a=old?
+0001b1 df89      	RCALL	DOLIT	;n a a old
+0001b2 011e      	.DW		OLDER
+0001b3 d018      	RCALL	BUFQ	;n a old?
+0001b4 dfa6      	RCALL	QBRAN	;if a=old, fetch n in old_buf
+0001b5 01bd      	.DW		ICAT2	
+0001b6 01fc      	movw 	zl, tosl	;else, fetch from flash
+0001b7 2799      	clr 	tosh
+0001b8 9184      	lpm 	tosl, Z
+0001b9 9508      	RET
+                 ICAT1:
+0001ba df80      	RCALL	DOLIT
+0001bb 011c      	.DW		NEWER
+0001bc c002      	RJMP	ICAT3
+                 ICAT2:
+0001bd df7d      	RCALL	DOLIT
+0001be 011e      	.DW		OLDER
+                 ICAT3:
+0001bf d013      	RCALL	BUFAT
+0001c0 c0a0      	RJMP	CAT
+                 
+                 ;	CODE	6,"BUFFER"	; ptr -- buf
+                 BUFFER:
+0001c1 df79      	RCALL	DOLIT
+0001c2 0001      	.DW		$1
+0001c3 d0fa      	RCALL	ANDD
+0001c4 df96      	RCALL	QBRAN
+0001c5 01c9      	.DW		BUF_1
+0001c6 df74      	RCALL	DOLIT
+0001c7 0880      	.DW		BUF1
+0001c8 9508      	RET	
+                 BUF_1:
+0001c9 df71      	RCALL	DOLIT
+0001ca 0800      	.DW		BUF0
+0001cb 9508      	RET
+                 
+                 ;	CODE	6,"BUF?"	; a new/old -- f
+                 BUFQ:
+0001cc dfc0      	RCALL	AT
+0001cd d0e0      	RCALL	OVER
+0001ce d0ff      	RCALL	XORR
+0001cf df6b      	RCALL	DOLIT
+0001d0 7f80      	.DW		$7F80
+0001d1 d0ec      	RCALL	ANDD
+0001d2 9508      	RET
+                 
+                 ;	CODE	6,"BUF@"	; a new/old -- buuf_addr
+                 BUFAT:
+0001d3 dfb9      	RCALL	AT
+0001d4 dfec      	RCALL	BUFFER
+0001d5 d0ce      	RCALL	SWAPP
+0001d6 df64      	RCALL	DOLIT
+0001d7 007f      	.DW		$7F
+0001d8 d0e5      	RCALL	ANDD
+0001d9 c0f4      	RJMP	XORR
+                 
+                 ;   I!	( w a -- )
+                 ;	Store w to flash memory byte location.
+                 
+0001da 0354
+0001db 4902
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(677): macro 'CODE' called here
+0001dc 0021      	CODE	2,"I!"
+                 ISTOR:				;a=new?
+0001dd df5d      	RCALL	DOLIT
+0001de 011c      	.DW		NEWER
+0001df dfec      	RCALL	BUFQ	;n a a new_ptr
+0001e0 df7a      	RCALL	QBRAN	;if a=new, store n in new_buf
+0001e1 01f3      	.DW		ISTOR5	;else, a=old?
+                 ;
+0001e2 df58      	RCALL	DOLIT	;n a a old
+0001e3 011e      	.DW		OLDER
+0001e4 dfe7      	RCALL	BUFQ	;n a a old_ptr
+0001e5 df75      	RCALL	QBRAN	;if a=old, switch ptrs, store n in new_buf
+0001e6 01f2      	.DW		ISTOR4	;else, flush old_buf
+                 
+0001e7 df53      	RCALL	DOLIT	;n a old
+0001e8 011e      	.DW		OLDER
+0001e9 dfa3      	RCALL	AT	;n a old_ptr 
+0001ea df50      	RCALL	DOLIT	;n a dirty?
+0001eb 8000      	.DW		$8000
+0001ec d0d1      	RCALL	ANDD
+0001ed df6d      	RCALL	QBRAN	;if not dirty, go read flash data into old_buf
+0001ee 01f0      	.DW		ISTOR2	;else, flush old_buf to flash
+                 
+0001ef d004      ISTOR1:	RCALL	FLUSH_OLD
+0001f0 d012      ISTOR2:	RCALL	READ_FLASH
+0001f1 d01c      ISTOR3:	RCALL	UPDATE_OLD
+0001f2 d02a      ISTOR4:	RCALL	SWITCH
+0001f3 c035      ISTOR5:	RJMP 	UPDATE_NEW
+                 
+                 ;	CODE	5,"FLUSH"	; --
+                 FLUSH_OLD:
+0001f4 df46      	RCALL	DOLIT	;old
+0001f5 011e      	.DW		OLDER
+0001f6 df96      	RCALL	AT	;old_ptr
+0001f7 d0a5      	RCALL	DUPP	;old_ptr old_ptr
+0001f8 df42      	RCALL	DOLIT
+0001f9 7f80      	.DW		$7F80
+0001fa d0c3      	RCALL	ANDD	;old_ptr flash_addr 
+0001fb d0a1      	RCALL	DUPP	;old_ptr flash_addr flash_addr
+0001fc 940e 3fd0 	CALL	ERASE	;old_ptr flash_addr
+                 ;
+0001fe d0a5      	RCALL	SWAPP	;flash_addr old_ptr 
+0001ff dfc1      	RCALL	BUFFER	;flash_addr buf
+000200 d0a3      	RCALL	SWAPP	;buf flash_addr
+000201 940c 3fd7 	JMP	WRITE	
+                 
+                 ;	CODE	4,"@OLD"	;a -- a
+                 READ_FLASH:	;read new flash data into old_buf
+000203 df37      	RCALL	DOLIT	;a old
+000204 011e      	.DW		OLDER
+000205 df87      	RCALL	AT		;a old_ptr
+000206 dfba      	RCALL	BUFFER	;a buf
+000207 d0a6      	RCALL	OVER	;a buf a
+000208 df32      	RCALL	DOLIT
+000209 7f80      	.DW		$7F80
+00020a d0b3      	RCALL	ANDD	;a buf flash_addr
+00020b d098      	RCALL	SWAPP	;a flash_addr buf
+00020c 940c 3feb 	JMP	READ	;a
+                 
+                 ;	CODE	4,"!OLD"	;a --
+                 UPDATE_OLD:			;preserve buf? bit
+00020e d08e      	RCALL	DUPP	;a a
+00020f df2b      	RCALL	DOLIT	;
+000210 7f80      	.DW		$7F80
+000211 d0ac      	RCALL	ANDD	;a page_addr
+000212 df28      	RCALL	DOLIT
+000213 011e      	.DW		OLDER	;a page_addr old
+000214 d08f      	RCALL	SWAPP	;a old page_addr
+000215 d098      	RCALL	OVER	;a old page_addr old
+000216 df76      	RCALL	AT	;a old page_addr old_ptr
+000217 df23      	RCALL	DOLIT
+000218 0001      	.DW		$1
+000219 d0a4      	RCALL	ANDD	;a old page_addr buf?
+00021a d0ab      	RCALL	ORR	;a old updates_old_ptr
+00021b d088      	RCALL	SWAPP	;a old_ptr old
+00021c cf66      	RJMP	STORE	;a
+                 
+                 ;	CODE	6,"SWITCH"	; --
+                 SWITCH:	
+00021d df1d      	RCALL	DOLIT	;old
+00021e 011e      	.DW		OLDER
+00021f df6d      	RCALL	AT		;old_ptr
+000220 df1a      	RCALL	DOLIT	;old_ptr new
+000221 011c      	.DW		NEWER
+000222 df6a      	RCALL	AT		;old_ptr new_ptr
+000223 df17      	RCALL	DOLIT	;old_ptr new_ptr old
+000224 011e      	.DW		OLDER
+000225 df5d      	RCALL	STORE	;old_ptr
+000226 df14      	RCALL	DOLIT	;old_ptr new
+000227 011c      	.DW		NEWER
+000228 cf5a      	RJMP	STORE	; 
+                 	
+                 ;	CODE	4,"!NEW"	;n a --
+                 UPDATE_NEW:			;write data to new buufer, set dirty bit
+000229 df11      	RCALL	DOLIT	;n a 7e
+00022a 007e      	.DW		$7E
+00022b d092      	RCALL	ANDD	;n disp
+00022c df0e      	RCALL	DOLIT	;n disp new
+00022d 011c      	.DW		NEWER
+00022e df5e      	RCALL	AT		;n disp new_ptr
+00022f df91      	RCALL	BUFFER	;n disp buf
+                 UPDAT1:
+000230 d095      	RCALL	ORR		;n buff_addr
+000231 df51      	RCALL	STORE	;update word in new_buf
+                 
+000232 df08      	RCALL	DOLIT	;set dirty bit in newer
+000233 011c      	.DW		NEWER
+000234 d068      	RCALL	DUPP	;newer newer
+000235 df57      	RCALL	AT		;newer new_ptr
+000236 df04      	RCALL	DOLIT
+000237 8000      	.DW		$8000
+000238 d08d      	RCALL	ORR		;newer new_ptr_dirty
+000239 d06a      	RCALL	SWAPP
+00023a cf48      	RJMP	STORE	;new buf is dirty now
+                 
+                 ;	EMPTY-BUFFERS ( -- )
+00023b 03b6
+00023c 4605
+00023d 554c
+00023e 4853      	CODE	5,"FLUSH"
+                 
+                 EMPTY_BUF:
+00023f d003      	RCALL	EMPTY_OLD
+000240 dfdc      	RCALL	SWITCH
+000241 d001      	RCALL	EMPTY_OLD
+000242 cfda      	RJMP	SWITCH
+                 
+                 ;	EMPTY_OLD	;flush old buffer if it is dirty
+                 
+                 EMPTY_OLD:
+000243 def7      	RCALL	DOLIT	;old
+000244 011e      	.DW		OLDER
+000245 df47      	RCALL	AT		;old_ptr 
+000246 d056      	RCALL	DUPP	;old_ptr old_ptr
+000247 def3      	RCALL	DOLIT	;
+000248 8000      	.DW		$8000
+000249 d074      	RCALL	ANDD	;old_ptr dirty?
+00024a df10      	RCALL	QBRAN	;if not dirty, exit
+00024b 0253      	.DW		EMPTY_1	;else, flush old_buf
+                 ;
+00024c deee      	RCALL	DOLIT	;old_ptr
+00024d 7fff      	.DW		$7FFF
+00024e d06f      	RCALL	ANDD	;old_ptr, dirty bit cleared
+00024f deeb      	RCALL	DOLIT
+000250 011e      	.DW		OLDER
+000251 df31      	RCALL	STORE	;old_ptr flash_addr
+000252 cfa1      	RJMP	FLUSH_OLD
+                 EMPTY_1:
+000253 c043      	RJMP	DROP
+                 
+                 ;   C!	( c b -- )
+                 ;	Pop the data stack to byte memory.
+                 
+000254 0478
+000255 4302
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(827): macro 'CODE' called here
+000256 0021      	CODE	2,"C!"
+                 CSTOR:
+000257 01fc      	movw 	zl, tosl
+000258 9189
+000259 9199      	loadtos
+00025a 8380      	st 		Z, tosl
+00025b 9189
+00025c 9199      	loadtos
+00025d 9508      	RET
+                 
+                 ;   C@	( b -- c )
+                 ;	Push byte memory location to the data stack.
+                 
+00025e 04aa
+00025f 4302
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(838): macro 'CODE' called here
+000260 0040      	CODE	2,"C@"
+                 CAT:
+000261 01fc      	movw 	zl, tosl
+000262 2799      	clr 	tosh
+000263 8180      	ld 		tosl, Z
+000264 9508      	RET
+                 
+                 ;   R>	( -- w )
+                 ;	Pop the return stack to the data stack.
+                 
+000265 04be
+000266 5242
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(848): macro 'CODE' called here
+000267 003e      	CODE	COMPO+2,"R>"
+                 RFROM:
+000268 939a
+000269 938a      	savetos
+00026a 91bf      	pop		xh
+00026b 91af      	pop		xl
+00026c 919f      	pop 	tosh
+00026d 918f      	pop 	tosl
+00026e 93af      	push 	xl
+00026f 93bf      	push 	xh
+000270 9508      	RET
+                 
+                 ;   R@	( -- w )
+                 ;	Copy top of return stack to the data stack.
+                 
+000271 04cc
+000272 5202
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(862): macro 'CODE' called here
+000273 0040      	CODE	2,"R@"
+                 RAT:
+000274 939a
+000275 938a      	savetos
+000276 91bf      	pop		xh
+000277 91af      	pop		xl
+000278 919f      	pop 	tosh
+000279 918f      	pop 	tosl
+00027a 938f      	push 	tosl
+00027b 939f      	push 	tosh
+00027c 93af      	push 	xl
+00027d 93bf      	push 	xh
+00027e 9508      	RET
+                 
+                 ;   >R	( w -- )
+                 ;	Push the data stack to the return stack.
+                 
+00027f 04e4
+000280 3e42
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(878): macro 'CODE' called here
+000281 0052      	CODE	COMPO+2,">R"
+                 TOR:
+000282 91bf      	pop		xh
+000283 91af      	pop		xl
+000284 938f      	push 	tosl
+000285 939f      	push 	tosh
+000286 93af      	push 	xl
+000287 93bf      	push 	xh
+000288 9189
+000289 9199      	loadtos
+00028a 9508      	RET
+                 
+                 ;   SP@	( -- a )
+                 ;	Push the current data stack pointer.
+                 
+                 ;	CODE	3,"SP@"
+                 SPAT:
+00028b 939a
+00028c 938a      	savetos
+00028d 01ce      	movw	tosl, yl
+00028e 9508      	RET
+                 
+                 ;   SP!	( a -- )
+                 ;	Set the data stack pointer.
+                 
+                 ;	CODE	3,"SP!"
+                 SPSTO:
+00028f 01ec      	movw 	yl, tosl
+000290 9189
+000291 9199      	loadtos
+000292 9508      	RET
+                 
+                 ;   DROP	( w -- )
+                 ;	Discard top stack item.
+                 
+000293 0500
+000294 4404
+000295 4f52
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(910): macro 'CODE' called here
+000296 0050      	CODE	4,"DROP"
+                 DROP:
+000297 9189
+000298 9199      	loadtos
+000299 9508      	RET
+                 
+                 ;   DUP	( w -- w w )
+                 ;	Duplicate the top stack item.
+                 
+00029a 0528
+00029b 4403
+00029c 5055      	CODE	3,"DUP"
+                 DUPP:
+00029d 939a
+00029e 938a      	savetos
+00029f 9508      	RET
+                 
+                 ;   SWAP	( w1 w2 -- w2 w1 )
+                 ;	Exchange top two stack items.
+                 
+0002a0 0536
+0002a1 5304
+0002a2 4157
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(926): macro 'CODE' called here
+0002a3 0050      	CODE	4,"SWAP"
+                 SWAPP:
+0002a4 01dc      	movw 	xl, tosl
+0002a5 9189      	ld		tosl,Y+
+0002a6 9199      	ld		tosh,Y+
+0002a7 93ba      	st 		-Y, xh
+0002a8 93aa      	st 		-Y, xl
+0002a9 9508      	RET
+                 
+                 ;   OVER	( w1 w2 -- w1 w2 w1 )
+                 ;	Copy second stack item to top.
+                 
+0002aa 0542
+0002ab 4f04
+0002ac 4556
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(938): macro 'CODE' called here
+0002ad 0052      	CODE	4,"OVER"
+                 OVER:
+0002ae 939a
+0002af 938a      	savetos
+0002b0 818a      	ldd 	tosl, Y+2
+0002b1 819b      	ldd 	tosh, Y+3
+0002b2 9508      	RET
+                 
+                 ;   0<	( n -- t )
+                 ;	Return true if n is negative.
+                 
+0002b3 0556
+0002b4 3002
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(948): macro 'CODE' called here
+0002b5 003c      	CODE	2,"0<"
+                 ZLESS:
+0002b6 2399      	tst 	tosh
+0002b7 01c1      	movw 	tosl, zerol
+0002b8 f40c      	brge 	ZLESS1
+0002b9 9701      	sbiw 	tosl,1
+                 ZLESS1:
+0002ba 9508      	RET
+                 
+                 ;   AND	( w w -- w )
+                 ;	Bitwise AND.
+                 
+0002bb 0568
+0002bc 4103
+0002bd 444e      	CODE	3,"AND"
+                 ANDD:
+0002be 91a9      	ld 		xl, Y+
+0002bf 91b9      	ld 		xh, Y+
+0002c0 238a      	and 	tosl, xl
+0002c1 239b      	and 	tosh, xh
+0002c2 9508      	RET
+                 
+                 ;   OR	( w w -- w )
+                 ;	Bitwise inclusive OR.
+                 
+0002c3 0578
+0002c4 4f02
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(151): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(971): macro 'CODE' called here
+0002c5 0052      	CODE	2,"OR"
+                 ORR:
+0002c6 91a9      	ld 		xl, Y+
+0002c7 91b9      	ld 		xh, Y+
+0002c8 2b8a      	or 		tosl, xl
+0002c9 2b9b      	or 		tosh, xh
+0002ca 9508      	RET
+                 
+                 ;   XOR	( w w -- w )
+                 ;	Bitwise exclusive OR.
+                 
+0002cb 0588
+0002cc 5803
+0002cd 524f      	CODE	3,"XOR"
+                 XORR:
+0002ce 91a9      	ld 		xl, Y+
+0002cf 91b9      	ld 		xh, Y+
+0002d0 278a         	eor 	tosl, xl
+0002d1 279b      	eor 	tosh, xh
+0002d2 9508      	RET
+                 
+                 ;   UM+	( u u -- udsum )
+                 ;	Add two unsigned single numbers and return a double sum.
+                 
+0002d3 0598
+0002d4 5503
+0002d5 2b4d      	CODE	3,"UM+"
+                 UPLUS:
+0002d6 91a9      	ld 		xl, Y+
+0002d7 91b9      	ld 		xh, Y+
+0002d8 0f8a      	add 	tosl, xl
+0002d9 1f9b      	adc 	tosh, xh
+0002da 939a
+0002db 938a      	savetos
+0002dc 2799      	clr		tosh
+0002dd 2788      	clr		tosl
+0002de 1f88      	rol		tosl
+0002df 9508      	RET
+                 
+                 ;; System and user variables
+                 
+                 ;   doVAR	( -- a )
+                 ;	Run time routine for VARIABLE and CREATE.
+                 
+                 ;	CODE	COMPO+5,"doVAR"
+                 DOVAR:
+0002e0 939a
+0002e1 938a      	savetos
+0002e2 91ff      	pop 	zh
+0002e3 91ef      	pop 	zl
+0002e4 0fee
+0002e5 1fff
+0002e6 9185
+0002e7 9195      	readflashcell tosl,tosh
+0002e8 9508      	RET
+                 
+                 ;   'BOOT	( -- a )
+                 ;	Storage of application address.
+                 
+0002e9 05a8
+0002ea 2705
+0002eb 4f42
+0002ec 544f      	COLON	5,"'BOOT"
+                 TBOOT:
+0002ed dff2      	RCALL	DOVAR
+0002ee 0100      	.DW		UPP
+                 
+                 ;   BASE	( -- a )
+                 ;	Storage of the radix base for numeric I/O.
+                 
+0002ef 05d4
+0002f0 4204
+0002f1 5341
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1029): macro 'COLON' called here
+0002f2 0045      	COLON	4,"BASE"
+                 BASE:
+0002f3 dfec      	RCALL	DOVAR
+0002f4 0104      	.DW		UPP+4
+                 
+                 ;   tmp	( -- a )
+                 ;	A temporary storage location used in parse and find.
+                 
+0002f5 05e0
+0002f6 5403
+0002f7 504d      	COLON	3,"TMP"
+                 TEMP:
+0002f8 dfe7      	RCALL	DOVAR
+0002f9 0106      	.DW		UPP+6
+                 
+                 ;   SPAN	( -- a )
+                 ;	Hold character count received by EXPECT.
+                 
+0002fa 05ec
+0002fb 5304
+0002fc 4150
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1045): macro 'COLON' called here
+0002fd 004e      	COLON	4,"SPAN"
+                 SPAN:
+0002fe dfe1      	RCALL	DOVAR
+0002ff 0108      	.DW		UPP+8
+                 
+                 ;   >IN	( -- a )
+                 ;	Hold the character pointer while parsing input stream.
+                 
+000300 05f6
+000301 3e03
+000302 4e49      	COLON	3,">IN"
+                 INN:
+000303 dfdc      	RCALL	DOVAR
+000304 010a      	.DW		UPP+10
+                 
+                 ;   #TIB	( -- a )
+                 ;	Hold the current count in and address of the terminal input buffer.
+                 
+000305 0602
+000306 2304
+000307 4954
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1061): macro 'COLON' called here
+000308 0042      	COLON	4,"#TIB"
+                 NTIB:
+000309 dfd6      	RCALL	DOVAR
+00030a 010c      	.DW		UPP+12
+                 
+                 ;   'TIB	( -- a )
+                 ;	Hold the current count in and address of the terminal input buffer.
+                 
+00030b 060c
+00030c 2704
+00030d 4954
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1069): macro 'COLON' called here
+00030e 0042      	COLON	4,"'TIB"
+                 TTIB:
+00030f dfd0      	RCALL	DOVAR
+000310 010e      	.DW		UPP+14
+                 
+                 ;   'EVAL	( -- a )
+                 ;	Execution vector of EVAL.
+                 
+000311 0618
+000312 2705
+000313 5645
+000314 4c41      	COLON	5,"'EVAL"
+                 TEVAL:
+000315 dfca      	RCALL	DOVAR
+000316 0110      	.DW		UPP+16
+                 
+                 ;   HLD	( -- a )
+                 ;	Hold a pointer in building a numeric output string.
+                 
+000317 0624
+000318 4803
+000319 444c      	COLON	3,"HLD"
+                 HLD:
+00031a dfc5      	RCALL	DOVAR
+00031b 0112      	.DW		UPP+18
+                 
+                 ;   CONTEXT	( -- a )
+                 ;	A area to specify vocabulary search order.
+                 
+00031c 0630
+00031d 4307
+00031e 4e4f
+00031f 4554
+000320 5458      	COLON	7,"CONTEXT"
+                 CNTXT:
+000321 dfbe      	RCALL	DOVAR
+000322 0114      	.DW		UPP+20
+                 
+                 ;   CP	( -- a )
+                 ;	Point to the top of the code dictionary.
+                 
+000323 063a
+000324 4302
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1101): macro 'COLON' called here
+000325 0050      	COLON	2,"CP"
+                 CPP:
+000326 dfb9      	RCALL	DOVAR
+000327 0116      	.DW		UPP+22
+                 
+                 ;   DP	( -- a )
+                 ;	Point to the free RAM space.
+                 
+000328 0648
+000329 4402
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1109): macro 'COLON' called here
+00032a 0050      	COLON	2,"DP"
+                 DPP:
+00032b dfb4      	RCALL	DOVAR
+00032c 0118      	.DW		UPP+24
+                 
+                 ;   LAST	( -- a )
+                 ;	Point to the last name in the name dictionary.
+                 
+00032d 0652
+00032e 4c04
+00032f 5341
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1117): macro 'COLON' called here
+000330 0054      	COLON	4,"LAST"
+                 LAST:
+000331 dfae      	RCALL	DOVAR
+000332 011a      	.DW		UPP+26
+                 
+                 ;; Common functions
+                 
+                 ;   2*	( n -- n )
+                 ;	Multiply tos by cell size in bytes.
+                 
+000333 065c
+000334 3202
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1127): macro 'COLON' called here
+000335 002a      	COLON	2,"2*"
+                 CELLS:
+000336 0f88      	lsl		tosl
+000337 1f99      	rol		tosh
+000338 9508      	ret
+                 
+                 ;   2/	( n -- n )
+                 ;	Divide tos by cell size in bytes.
+                 
+000339 0668
+00033a 3202
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1136): macro 'COLON' called here
+00033b 002f      	COLON	2,"2/"
+                 TWOSL:
+00033c 9595      	asr		tosh
+00033d 9587      	ror		tosl
+00033e 9508      	ret
+                 
+                 ;   ALIGNED	( b -- a )
+                 ;	Align address to the cell boundary.
+                 
+                 ;	COLON	7,"ALIGNED"
+                 ALGND:
+00033f 9601      	adiw	tosl,1
+000340 7f8e      	andi	tosl,254
+000341 9508      	ret
+                 
+                 ;   BL	( -- 32 )
+                 ;	Return 32, the blank character.
+                 
+000342 0674
+000343 4202
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1154): macro 'COLON' called here
+000344 004c      	COLON	2,"BL"
+                 BLANK:
+000345 939a
+000346 938a      	savetos
+000347 e280      	ldi		tosl,32
+000348 2799      	clr		tosh
+000349 9508      	ret
+                 
+                 ;   ?DUP	( w -- w w | 0 )
+                 ;	Dup tos if its is not zero.
+                 
+00034a 0686
+00034b 3f04
+00034c 5544
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1164): macro 'COLON' called here
+00034d 0050      	COLON	4,"?DUP"
+                 QDUP:
+00034e 2f08          mov 	temp0, tosl
+00034f 2b09          or 		temp0, tosh
+000350 f011          breq 	QDUP1
+000351 939a
+000352 938a          savetos
+                 QDUP1:
+000353 9508      	RET
+                 
+                 ;   ROT	( w1 w2 w3 -- w2 w3 w1 )
+                 ;	Rot 3rd item to top.
+                 
+000354 0696
+000355 5203
+000356 544f      	COLON	3,"ROT"
+                 ROT:
+000357 018c          movw 	temp0, tosl
+000358 9129          ld 		temp2, Y+
+000359 9139          ld 		temp3, Y+ 
+00035a 9189
+00035b 9199          loadtos
+00035c 933a          st 		-Y, temp3
+00035d 932a          st 		-Y, temp2
+00035e 931a          st 		-Y, temp1
+00035f 930a          st 		-Y, temp0
+000360 9508      	RET
+                 
+                 ;   2DROP	( w w -- )
+                 ;	Discard two items on stack.
+                 
+000361 06aa
+000362 3205
+000363 5244
+000364 504f      	COLON	5,"2DROP"
+                 DDROP:
+000365 9189
+000366 9199      	loadtos
+000367 9189
+000368 9199      	loadtos
+000369 9508      	ret
+                 
+                 ;   2DUP	( w1 w2 -- w1 w2 w1 w2 )
+                 ;	Duplicate top two items.
+                 
+00036a 06c4
+00036b 3204
+00036c 5544
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1200): macro 'COLON' called here
+00036d 0050      	COLON	4,"2DUP"
+                 DDUP:
+00036e df3f      	RCALL	OVER
+00036f cf3e      	RJMP	OVER
+                 
+                 ;   +	( w w -- sum )
+                 ;	Add top two items.
+                 
+000370 06d6
+000371 2b01      	COLON	1,"+"
+                 PLUS:
+000372 9109          ld 		temp0, Y+
+000373 9119          ld 		temp1, Y+
+000374 0f80          add 	tosl, temp0
+000375 1f91          adc 	tosh, temp1
+000376 9508      	RET
+                 
+                 ;   NOT	( w -- w )
+                 ;	One's complement of tos.
+                 
+000377 06e2
+000378 4906
+000379 564e
+00037a 5245
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1219): macro 'COLON' called here
+00037b 0054      	COLON	6,"INVERT"
+                 INVER:
+00037c 9580          com 	tosl
+00037d 9590          com 	tosh
+00037e 9508      	ret
+                 
+                 ;   NEGATE	( n -- -n )
+                 ;	Two's complement of tos.
+                 
+00037f 06f0
+000380 4e06
+000381 4745
+000382 5441
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1228): macro 'COLON' called here
+000383 0045      	COLON	6,"NEGATE"
+                 NEGAT:
+000384 dff7      	RCALL	INVER
+000385 9601      	adiw	tosl,1
+000386 9508      	ret
+                 
+                 ;   DNEGATE	( d -- -d )
+                 ;	Two's complement of top double.
+                 
+000387 0700
+000388 4407
+000389 454e
+00038a 4147
+00038b 4554      	COLON	7,"DNEGATE"
+                 DNEGA:
+00038c dfef      	RCALL	INVER
+00038d def4      	RCALL	TOR
+00038e dfed      	RCALL	INVER
+00038f ddab      	RCALL	DOLIT
+000390 0001      	.DW	1
+000391 df44      	RCALL	UPLUS
+000392 ded5      	RCALL	RFROM
+000393 cfde      	RJMP	PLUS
+                 
+                 ;   -	( n1 n2 -- n1-n2 )
+                 ;	Subtraction.
+                 
+000394 0710
+000395 2d01      	COLON	1,"-"
+                 SUBB:
+000396 9109          ld 		temp0, Y+
+000397 9119          ld 		temp1, Y+
+000398 1b08          sub 	temp0, tosl
+000399 0b19          sbc 	temp1, tosh
+00039a 01c8          movw 	tosl, temp0
+00039b 9508      	ret
+                 
+                 ;   ABS		( n -- n )
+                 ;	Return the absolute value of n.
+                 
+00039c 072a
+00039d 4103
+00039e 5342      	COLON	3,"ABS"
+                 ABSS:
+00039f defd      	RCALL	DUPP
+0003a0 df15      	RCALL	ZLESS
+0003a1 ddb9      	RCALL	QBRAN
+0003a2 03a4      	.DW	ABS1
+0003a3 cfe0      	RJMP	NEGAT
+                 ABS1:	
+0003a4 9508      	RET
+                 
+                 ;   =	( w w -- t )
+                 ;	Return true if top two are equal.
+                 
+0003a5 073a
+0003a6 3d01      	COLON	1,"="
+                 EQUAL:
+0003a7 df26      	RCALL	XORR
+0003a8 ddb2      	RCALL	QBRAN
+0003a9 03ad      	.DW		EQU1
+0003aa dd90      	RCALL	DOLIT
+0003ab 0000      	.DW		0
+0003ac 9508      	RET
+                 EQU1:
+0003ad dd8d      	RCALL	DOLIT
+0003ae ffff      	.DW		-1
+0003af 9508      	RET
+                 
+                 ;   U<	( u u -- t )
+                 ;	Unsigned compare of top two items.
+                 
+0003b0 074c
+0003b1 5502
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1292): macro 'COLON' called here
+0003b2 003c      	COLON	2,"U<"
+                 ULESS:
+0003b3 dfba      	RCALL	DDUP
+0003b4 df19      	RCALL	XORR
+0003b5 df00      	RCALL	ZLESS
+0003b6 dda4      	RCALL	QBRAN
+0003b7 03bb      	.DW		ULES1
+0003b8 deeb      	RCALL	SWAPP
+0003b9 dedd      	RCALL	DROP
+0003ba cefb      	RJMP	ZLESS
+                 ULES1:
+0003bb dfda      	RCALL	SUBB
+0003bc cef9      	RJMP	ZLESS
+                 
+                 ;   <	( n1 n2 -- t )
+                 ;	Signed compare of top two items.
+                 
+0003bd 0762
+0003be 3c01      	COLON	1,"<"
+                 LESS:
+0003bf dfae      	RCALL	DDUP
+0003c0 df0d      	RCALL	XORR
+0003c1 def4      	RCALL	ZLESS
+0003c2 dd98      	RCALL	QBRAN
+0003c3 03c6      	.DW		LESS1
+0003c4 ded2      	RCALL	DROP
+0003c5 cef0      	RJMP	ZLESS
+                 LESS1:
+0003c6 dfcf      	RCALL	SUBB
+0003c7 ceee      	RJMP	ZLESS
+                 
+                 ;   MAX	( n n -- n )
+                 ;	Return the greater of two top stack items.
+                 
+0003c8 077c
+0003c9 4d03
+0003ca 5841      	COLON	3,"MAX"
+                 MAX:
+0003cb dfa2      	RCALL	DDUP
+0003cc dff2      	RCALL	LESS
+0003cd dd8d      	RCALL	QBRAN
+0003ce 03d0      	.DW		MAX1
+0003cf ded4      	RCALL	SWAPP
+                 MAX1:
+0003d0 cec6      	RJMP	DROP
+                 
+                 ;   MIN	( n n -- n )
+                 ;	Return the smaller of top two stack items.
+                 
+0003d1 0792
+0003d2 4d03
+0003d3 4e49      	COLON	3,"MIN"
+                 MIN:
+0003d4 df99      	RCALL	DDUP
+0003d5 dece      	RCALL	SWAPP
+0003d6 dfe8      	RCALL	LESS
+0003d7 dd83      	RCALL	QBRAN
+0003d8 03da      	.DW		MIN1
+0003d9 deca      	RCALL	SWAPP
+                 MIN1:
+0003da cebc      	RJMP	DROP
+                 
+                 ;   WITHIN	( u ul uh -- t )
+                 ;	Return true if u is within the range of ul and uh. ( ul <= u < uh )
+                 
+0003db 07a4
+0003dc 5706
+0003dd 5449
+0003de 4948
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1352): macro 'COLON' called here
+0003df 004e      	COLON	6,"WITHIN"
+                 WITHI:
+0003e0 decd      	RCALL	OVER
+0003e1 dfb4      	RCALL	SUBB
+0003e2 de9f      	RCALL	TOR
+0003e3 dfb2      	RCALL	SUBB
+0003e4 de83      	RCALL	RFROM
+0003e5 cfcd      	RJMP	ULESS
+                 
+                 ;; Divide
+                 
+                 ;   UM/MOD	( udl udh un -- ur uq )
+                 ;	Unsigned divide of a double by a single. Return mod and quotient.
+                 
+0003e6 07b8
+0003e7 5506
+0003e8 2f4d
+0003e9 4f4d
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1366): macro 'COLON' called here
+0003ea 0044      	COLON	6,"UM/MOD"
+                 UMMOD:
+0003eb 017c          movw 	temp4, tosl
+0003ec 9129          ld 		temp2, Y+
+0003ed 9139          ld 		temp3, Y+
+0003ee 9109          ld 		temp0, Y+
+0003ef 9119          ld 		temp1, Y+
+                 ;; unsigned 32/16 -> 16r16 divide
+                   ; set 	loop counter
+0003f0 e140          ldi 	temp6,$10
+                 UMMOD1:
+                     ; shift left, saving high bit
+0003f1 2755          clr 	temp7
+0003f2 0f00          lsl 	temp0
+0003f3 1f11          rol 	temp1
+0003f4 1f22          rol 	temp2
+0003f5 1f33          rol 	temp3
+0003f6 1f55          rol 	temp7
+                   ; try subtracting divisor
+0003f7 152e          cp 		temp2, temp4
+0003f8 053f          cpc 	temp3, temp5
+0003f9 0552          cpc 	temp7,zerol
+0003fa f018          brcs 	UMMOD3
+                 UMMOD2:
+                     ; dividend is large enough
+                     ; do the subtraction for real
+                     ; and set lowest bit
+0003fb 9503          inc 	temp0
+0003fc 192e          sub 	temp2, temp4
+0003fd 093f          sbc 	temp3, temp5
+                 UMMOD3:
+0003fe 954a          dec  	temp6
+0003ff f789          brne 	UMMOD1
+                 UMMOD4:
+                     ; put remainder on stack
+000400 933a          st 		-Y,temp3
+000401 932a          st 		-Y,temp2
+                     ; put quotient on stack
+000402 01c8          movw 	tosl, temp0
+000403 9508      	ret
+                 
+                 ;   M/MOD	( d n -- r q )
+                 ;	Signed floored divide of double by single. Return mod and quotient.
+                 
+000404 07ce
+000405 4d05
+000406 4d2f
+000407 444f      	COLON	5,"M/MOD"
+                 MSMOD:
+000408 de94      	RCALL	DUPP
+000409 deac      	RCALL	ZLESS
+00040a de92      	RCALL	DUPP
+00040b de76      	RCALL	TOR
+00040c dd4e      	RCALL	QBRAN
+00040d 0412      	.DW	MMOD1
+00040e df75      	RCALL	NEGAT
+00040f de72      	RCALL	TOR
+000410 df7b      	RCALL	DNEGA
+000411 de56      	RCALL	RFROM
+                 MMOD1:	
+000412 de6f      	RCALL	TOR
+000413 de89      	RCALL	DUPP
+000414 dea1      	RCALL	ZLESS
+000415 dd45      	RCALL	QBRAN
+000416 0419      	.DW	MMOD2
+000417 de5c      	RCALL	RAT
+000418 df59      	RCALL	PLUS
+                 MMOD2:	
+000419 de4e      	RCALL	RFROM
+00041a dfd0      	RCALL	UMMOD
+00041b de4c      	RCALL	RFROM
+00041c dd3e      	RCALL	QBRAN
+00041d 0421      	.DW	MMOD3
+00041e de85      	RCALL	SWAPP
+00041f df64      	RCALL	NEGAT
+000420 de83      	RCALL	SWAPP
+                 MMOD3:	
+000421 9508      	RET
+                 
+                 ;   /MOD	( n n -- r q )
+                 ;	Signed divide. Return mod and quotient.
+                 
+000422 080a
+000423 2f04
+000424 4f4d
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1445): macro 'COLON' called here
+000425 0044      	COLON	4,"/MOD"
+                 SLMOD:
+000426 de87      	RCALL	OVER
+000427 de8e      	RCALL	ZLESS
+000428 de7b      	RCALL	SWAPP
+000429 cfde      	RJMP	MSMOD
+                 
+                 ;   MOD	( n n -- r )
+                 ;	Signed divide. Return mod only.
+                 
+00042a 0846
+00042b 4d03
+00042c 444f      	COLON	3,"MOD"
+                 MODD:
+00042d dff8      	RCALL	SLMOD
+00042e ce68      	RJMP	DROP
+                 
+                 
+                 ;   /	( n n -- q )
+                 ;	Signed divide. Return quotient only.
+                 
+00042f 0856
+000430 2f01      	COLON	1,"/"
+                 SLASH:
+000431 dff4      	RCALL	SLMOD
+000432 de71      	RCALL	SWAPP
+000433 ce63      	RJMP	DROP
+                 
+                 ;; Multiply
+                 
+                 ;   UM*	( u u -- ud )
+                 ;	Unsigned multiply. Return double product.
+                 
+000434 0860
+000435 5503
+000436 2a4d      	COLON	3,"UM*"
+                 UMSTA:
+000437 018c          movw 	temp0, tosl
+000438 9189
+000439 9199          loadtos
+                     ; low bytes
+00043a 9f80          mul 	tosl,temp0
+00043b 01f0          movw 	zl, r0
+00043c 2722          clr 	temp2
+00043d 2733          clr 	temp3
+                     ; middle bytes
+00043e 9f90          mul 	tosh, temp0
+00043f 0df0          add 	zh, r0
+000440 1d21          adc 	temp2, r1
+000441 1d33          adc 	temp3, zeroh
+000442 9f81      	mul 	tosl, temp1
+000443 0df0      	add 	zh, r0
+000444 1d21      	adc 	temp2, r1
+000445 1d33      	adc 	temp3, zeroh
+000446 9f91      	mul 	tosh, temp1
+000447 0d20      	add 	temp2, r0
+000448 1d31      	adc 	temp3, r1
+000449 01cf      	movw 	tosl, zl
+00044a 939a
+00044b 938a      	savetos
+00044c 01c9      	movw 	tosl, temp2
+00044d 9508      	ret
+                 
+                 ;   *	( n n -- n )
+                 ;	Signed multiply. Return single product.
+                 
+00044e 086a
+00044f 2a01      	COLON	1,"*"
+                 STAR:
+000450 d004      	RCALL	MSTAR
+000451 ce45      	RJMP	DROP
+                 
+                 ;   M*		( n n -- d )
+                 ;	Signed multiply. Return double product.
+                 
+000452 089e
+000453 4d02
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1512): macro 'COLON' called here
+000454 002a      	COLON	2,"M*"
+                 MSTAR:
+000455 df18      	RCALL	DDUP
+000456 de77      	RCALL	XORR
+000457 de5e      	RCALL	ZLESS
+000458 de29      	RCALL	TOR
+000459 df45      	RCALL	ABSS
+00045a de49      	RCALL	SWAPP
+00045b df43      	RCALL	ABSS
+00045c dfda      	RCALL	UMSTA
+00045d de0a      	RCALL	RFROM
+00045e dcfc      	RCALL	QBRAN
+00045f 0461      	.DW	MSTA1
+000460 df2b      	RCALL	DNEGA
+                 MSTA1:	
+000461 9508      	RET
+                 
+                 ;   */MOD	( n1 n2 n3 -- r q )
+                 ;	Multiply n1 and n2, then divide by n3. Return mod and quotient.
+                 
+000462 08a6
+000463 2a05
+000464 4d2f
+000465 444f      	COLON	5,"*/MOD"
+                 SSMOD:
+000466 de1b      	RCALL	TOR
+000467 dfed      	RCALL	MSTAR
+000468 ddff      	RCALL	RFROM
+000469 cf9e      	RJMP	MSMOD
+                 
+                 ;   */	( n1 n2 n3 -- q )
+                 ;	Multiply n1 by n2, then divide by n3. Return quotient only.
+                 
+00046a 08c6
+00046b 2a02
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1542): macro 'COLON' called here
+00046c 002f      	COLON	2,"*/"
+                 STASL:
+00046d dff8      	RCALL	SSMOD
+00046e de35      	RCALL	SWAPP
+00046f ce27      	RJMP	DROP
+                 
+                 ;; Miscellaneous
+                 
+                 ;   >CHAR	( c -- c )
+                 ;	Filter non-printing characters.
+                 
+                 ;	COLON	5,">CHAR"
+                 TCHAR:
+000470 9508          RET           ;  No filter ;albert  2012/5/2
+000471 de2b      	RCALL	DUPP
+000472 ded2      	RCALL	BLANK
+000473 dcc7      	RCALL	DOLIT
+000474 007f      	.DW		$7F
+000475 df6a      	RCALL	WITHI
+000476 dce4      	RCALL	QBRAN
+000477 0479      	.DW		TCHAR1
+000478 9508      	RET
+                 TCHAR1:	
+000479 de1d      	RCALL	DROP
+00047a dcc0      	RCALL	DOLIT
+00047b 005f      	.DW		'_'
+00047c 9508      	RET
+                 
+                 
+                 ;   DEPTH	( -- n )
+                 ;	Return the depth of the data stack.
+                 
+00047d 08d6
+00047e 4405
+00047f 5045
+000480 4854      	COLON	5,"DEPTH"
+                 DEPTH:
+000481 de09      	RCALL	SPAT
+000482 dcb8      	RCALL	DOLIT
+000483 06ee      	.DW		SPP-2
+000484 de1f      	RCALL	SWAPP
+000485 df10      	RCALL	SUBB
+000486 ceb5      	RJMP	TWOSL
+                 
+                 ;   PICK	( ... +n -- ... w )
+                 ;	Copy the nth stack item to tos.
+                 
+000487 08fc
+000488 5004
+000489 4349
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1586): macro 'COLON' called here
+00048a 004b      	COLON	4,"PICK"
+                 PICK:
+00048b 9601      	ADIW	TOSL,1
+00048c dea9      	RCALL	CELLS
+00048d ddfd      	RCALL	SPAT
+00048e dee3      	RCALL	PLUS
+00048f ccfd      	RJMP	AT
+                 
+                 ;; Memory access
+                 
+                 ;   +!	( n a -- )
+                 ;	Add n to the contents at address a.
+                 
+000490 0910
+000491 2b02
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1599): macro 'COLON' called here
+000492 0021      	COLON	2,"+!"
+                 PSTOR:
+000493 de10      	RCALL	SWAPP
+000494 de19      	RCALL	OVER
+000495 dcf7      	RCALL	AT
+000496 dedb      	RCALL	PLUS
+000497 de0c      	RCALL	SWAPP
+000498 ccea      	RJMP	STORE
+                 
+                 ;   COUNT	( b -- b +n )
+                 ;	Return count byte of a string and add 1 to byte address.
+                 
+000499 0922
+00049a 4305
+00049b 554f
+00049c 544e      	COLON	5,"COUNT"
+                 COUNT:
+00049d 01fc      	movw	zl, tosl
+00049e 9101      	ld		temp0, z+
+00049f 01cf      	movw	tosl, zl
+0004a0 939a
+0004a1 938a      	savetos
+0004a2 2f80      	mov		tosl, temp0
+0004a3 2799      	clr		tosh
+0004a4 9508      	ret
+                 
+                 ;   ICOUNT	( b -- b +n )
+                 ;	Return count byte of a string and add 1 to byte address.
+                 
+0004a5 0934
+0004a6 4906
+0004a7 4f43
+0004a8 4e55
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1624): macro 'COLON' called here
+0004a9 0054      	COLON	6,"ICOUNT"
+                 ICOUNT:
+0004aa ddf2      	RCALL	DUPP
+0004ab 9601      	adiw	tosl,1
+0004ac ddf7      	RCALL	SWAPP
+0004ad ccfe      	RJMP	ICAT
+                 
+                 ;   HERE	( -- a )
+                 ;	Return the top of the code dictionary.
+                 
+0004ae 094c
+0004af 4804
+0004b0 5245
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1634): macro 'COLON' called here
+0004b1 0045      	COLON	4,"HERE"
+                 HEREE:
+0004b2 de78      	RCALL	DPP
+0004b3 ccd9      	RJMP	AT
+                 
+                 ;   PAD	( -- a )
+                 ;	Return the address of the text buffer above the code dictionary.
+                 
+0004b4 095e
+0004b5 5003
+0004b6 4441      	COLON	3,"PAD"
+                 PAD:
+0004b7 dffa      	RCALL	HEREE
+0004b8 dc82      	RCALL	DOLIT
+0004b9 0040      	.DW		$40
+0004ba ceb7      	RJMP	PLUS
+                 
+                 ;   TIB	( -- a )
+                 ;	Return the address of the terminal input buffer.
+                 
+0004bb 096a
+0004bc 5403
+0004bd 4249      	COLON	3,"TIB"
+                 TIB:
+0004be de4a      	RCALL	NTIB
+0004bf 9602      	ADIW	TOSL,2
+0004c0 cccc      	RJMP	AT
+                 
+                 ;   @EXECUTE	( a -- )
+                 ;	Execute vector stored in address a.
+                 
+0004c1 0978
+0004c2 4008
+0004c3 5845
+0004c4 4345
+0004c5 5455
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1661): macro 'COLON' called here
+0004c6 0045      	COLON	8,"@EXECUTE"
+                 ATEXE:
+0004c7 dcc5      	RCALL	AT
+0004c8 de85      	RCALL	QDUP	;?address or zero
+0004c9 dc91      	RCALL	QBRAN
+0004ca 04cc      	.DW		EXE1
+0004cb dca7      	RCALL	EXECU	;execute if non-zero
+                 EXE1:
+0004cc 9508      	RET				;do nothing if zero
+                 
+                 ;   CMOVE	( b1 b2 u -- )
+                 ;	Copy u bytes from b1 to b2.
+                 
+0004cd 0984
+0004ce 4305
+0004cf 4f4d
+0004d0 4556      	COLON	5,"CMOVE"
+                 CMOVE:
+0004d1 ddb0      	RCALL	TOR
+0004d2 c006      	RJMP	CMOV2
+                 CMOV1:
+0004d3 ddae      	RCALL	TOR
+0004d4 dfc8      	RCALL	COUNT
+0004d5 dd9e      	RCALL	RAT
+0004d6 dd80      	RCALL	CSTOR
+0004d7 dd90      	RCALL	RFROM
+0004d8 9601      	ADIW	TOSL,1
+                 CMOV2:
+0004d9 dc6e      	RCALL	DONXT
+0004da 04d3      	.DW		CMOV1
+0004db ce89      	RJMP	DDROP
+                 
+                 ;	UPPER	( c -- c' )
+                 ;	Change character to upper case
+                 
+                 ;	COLON	5,"UPPER"
+                 UPPER:
+0004dc 9508         RET      ; NO capitalize ; albert  2012/5/2 
+0004dd ddbf      	RCALL	DUPP
+0004de dc5c      	RCALL	DOLIT
+0004df 0061      	.DW		$61
+0004e0 dc5a      	RCALL	DOLIT
+0004e1 007b      	.DW		$7B
+0004e2 defd      	RCALL	WITHI
+0004e3 dc77      	RCALL	QBRAN
+0004e4 04e8      	.DW		UPPER1
+0004e5 dc55      	RCALL	DOLIT
+0004e6 005f      	.DW		$5F
+0004e7 ddd6      	RCALL	ANDD
+                 UPPER1:
+0004e8 9508      	RET
+                 
+                 ;   UMOVE	( a b u -- )
+                 ;	Copy u bytes from b1 to b2, changing to upper case.
+                 
+                 ;	COLON	5,"UMOVE"
+                 UMOVE:
+0004e9 dd98      	RCALL	TOR
+0004ea c007      	RJMP	UMOV2
+                 UMOV1:
+0004eb dd96      	RCALL	TOR
+0004ec dfb0      	RCALL	COUNT
+0004ed dfee      	RCALL	UPPER
+0004ee dd85      	RCALL	RAT
+0004ef dd67      	RCALL	CSTOR
+0004f0 dd77      	RCALL	RFROM
+0004f1 9601      	ADIW	TOSL,1
+                 UMOV2:
+0004f2 dc55      	RCALL	DONXT
+0004f3 04eb      	.DW		UMOV1
+0004f4 ce70      	RJMP	DDROP
+                 
+                 ;   FILL	( b u c -- )
+                 ;	Fill u bytes of character c to area beginning at b.
+                 
+0004f5 099c
+0004f6 4604
+0004f7 4c49
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1733): macro 'COLON' called here
+0004f8 004c      	COLON	4,"FILL"
+                 FILL:
+0004f9 ddaa      	RCALL	SWAPP
+0004fa dd87      	RCALL	TOR
+0004fb dda8      	RCALL	SWAPP
+0004fc c003      	RJMP	FILL2
+                 FILL1:
+0004fd de70      	RCALL	DDUP
+0004fe dd58      	RCALL	CSTOR
+0004ff 9601      	ADIW	TOSL,1
+                 FILL2:
+000500 dc47      	RCALL	DONXT
+000501 04fd      	.DW		FILL1
+000502 ce62      	RJMP	DDROP
+                 
+                 ;; Numeric output, single precision
+                 
+                 ;   DIGIT	( u -- c )
+                 ;	Convert digit u to a character.
+                 
+                 ;	COLON	5,"DIGIT"
+                 DIGIT:
+000503 dc37      	RCALL	DOLIT
+000504 0009      	.DW		9
+000505 dda8      	RCALL	OVER
+000506 deb8      	RCALL	LESS
+000507 dc33      	RCALL	DOLIT
+000508 0007      	.DW		7
+000509 ddb4      	RCALL	ANDD
+00050a de67      	RCALL	PLUS
+00050b dc2f      	RCALL	DOLIT
+00050c 0030      	.DW		'0'
+00050d ce64      	RJMP	PLUS
+                 
+                 ;   EXTRACT	( n base -- n c )
+                 ;	Extract the least significant digit from n.
+                 
+                 ;	COLON	7,"EXTRACT"
+                 EXTRC:
+00050e dc2c      	RCALL	DOLIT
+00050f 0000      	.DW		0
+000510 dd93      	RCALL	SWAPP
+000511 ded9      	RCALL	UMMOD
+000512 dd91      	RCALL	SWAPP
+000513 cfef      	RJMP	DIGIT
+                 
+                 ;   <#	( -- )
+                 ;	Initiate the numeric output process.
+                 
+000514 09ec
+000515 3c02
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1782): macro 'COLON' called here
+000516 0023      	COLON	2,"<#"
+                 BDIGS:
+000517 df9f      	RCALL	PAD
+000518 de01      	RCALL	HLD
+000519 cc69      	RJMP	STORE
+                 
+                 ;   HOLD	( c -- )
+                 ;	Insert a character into the numeric output string.
+                 
+00051a 0a2a
+00051b 4804
+00051c 4c4f
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1791): macro 'COLON' called here
+00051d 0044      	COLON	4,"HOLD"
+                 HOLD:
+00051e ddfb      	RCALL	HLD
+00051f dc6d      	RCALL	AT
+000520 9701      	SBIW	TOSL,1
+000521 dd7b      	RCALL	DUPP
+000522 ddf7      	RCALL	HLD
+000523 dc5f      	RCALL	STORE
+000524 cd32      	RJMP	CSTOR
+                 
+                 ;   #	( u -- u )
+                 ;	Extract one digit from u and append the digit to output string.
+                 
+000525 0a36
+000526 2301      	COLON	1,"#"
+                 DIG:
+000527 ddcb      	RCALL	BASE
+000528 dc64      	RCALL	AT
+000529 dfe4      	RCALL	EXTRC
+00052a cff3      	RJMP	HOLD
+                 
+                 ;   #S	( u -- 0 )
+                 ;	Convert u until all digits are added to the output string.
+                 
+00052b 0a4c
+00052c 2302
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1814): macro 'COLON' called here
+00052d 0053      	COLON	2,"#S"
+                 DIGS:
+                 DIGS1:
+00052e dff8      	RCALL	DIG
+00052f dd6d      	RCALL	DUPP
+000530 dc2a      	RCALL	QBRAN
+000531 0533      	.DW		DIGS2
+000532 cffb      	RJMP	DIGS1
+                 DIGS2:
+000533 9508      	RET
+                 
+                 ;   SIGN	( n -- )
+                 ;	Add a minus sign to the numeric output string.
+                 
+000534 0a58
+000535 5304
+000536 4749
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1828): macro 'COLON' called here
+000537 004e      	COLON	4,"SIGN"
+                 SIGN:
+000538 dd7d      	RCALL	ZLESS
+000539 dc21      	RCALL	QBRAN
+00053a 053e      	.DW		SIGN1
+00053b dbff      	RCALL	DOLIT
+00053c 002d      	.DW		'-'
+00053d dfe0      	RCALL	HOLD
+00053e 9508      SIGN1:	RET
+                 
+                 ;   #>	( w -- b u )
+                 ;	Prepare the output string to be TYPE'd.
+                 
+00053f 0a6a
+000540 2302
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(1841): macro 'COLON' called here
+000541 003e      	COLON	2,"#>"
+                 EDIGS:
+000542 dd54      	RCALL	DROP
+000543 ddd6      	RCALL	HLD
+000544 dc48      	RCALL	AT
+000545 df71      	RCALL	PAD
+000546 dd67      	RCALL	OVER
+000547 ce4e      	RJMP	SUBB
+                 
+                 ;   str		( w -- b u )
+                 ;	Convert a signed integer to a numeric string.
+                 
+                 ;	COLON	3,"str"
+                 STR:
+000548 dd54      	RCALL	DUPP
+000549 dd38      	RCALL	TOR
+00054a de54      	RCALL	ABSS
+00054b dfcb      	RCALL	BDIGS
+00054c dfe1      	RCALL	DIGS
+00054d dd1a      	RCALL	RFROM
+00054e dfe9      	RCALL	SIGN
+00054f cff2      	RJMP	EDIGS
+                 
+                 ;   HEX		( -- )
+                 ;	Use radix 16 as base for numeric conversions.
+                 
+000550 0a80
+000551 4803
+000552 5845      	COLON	3,"HEX"
+                 HEX:
+000553 dbe7      	RCALL	DOLIT
+000554 0010      	.DW	16
+000555 dd9d      	RCALL	BASE
+000556 cc2c      	RJMP	STORE
+                 
+                 ;   DECIMAL	( -- )
+                 ;	Use radix 10 as base for numeric conversions.
+                 
+000557 0aa2
+000558 4407
+000559 4345
+00055a 4d49
+00055b 4c41      	COLON	7,"DECIMAL"
+                 DECIM:
+00055c dbde      	RCALL	DOLIT
+00055d 000a      	.DW	10
+00055e dd94      	RCALL	BASE
+00055f cc23      	RJMP	STORE
+                 
+                 ;; Numeric input, single precision
+                 
+                 ;   DIGIT?	( c base -- u t )
+                 ;	Convert a character to its numeric value. A flag indicates success.
+                 
+                 ;	COLON	6,"DIGIT?"
+                 DIGTQ:
+000560 dd21      	RCALL	TOR
+000561 dbd9      	RCALL	DOLIT
+000562 0030      	.DW		'0'
+000563 de32      	RCALL	SUBB
+000564 dbd6      	RCALL	DOLIT
+000565 0009      	.DW		9
+000566 dd47      	RCALL	OVER
+000567 de57      	RCALL	LESS
+000568 dbf2      	RCALL	QBRAN
+000569 0572      	.DW		DGTQ1
+00056a dbd0      	RCALL	DOLIT
+00056b 0007      	.DW		7
+00056c de29      	RCALL	SUBB
+00056d dd2f      	RCALL	DUPP
+00056e dbcc      	RCALL	DOLIT
+00056f 000a      	.DW		10
+000570 de4e      	RCALL	LESS
+000571 dd54      	RCALL	ORR
+                 DGTQ1:
+000572 dd2a      	RCALL	DUPP
+000573 dcf4      	RCALL	RFROM
+000574 ce3e      	RJMP	ULESS
+                 
+                 ;   NUMBER?	( a -- n T | a F )
+                 ;	Convert a number string to integer. Push a flag on tos.
+                 
+000575 0ab0
+000576 4e07
+000577 4d55
+000578 4542
+000579 3f52      	COLON	7,"NUMBER?"
+                 NUMBQ:
+00057a dd78      	RCALL	BASE
+00057b dc11      	RCALL	AT
+00057c dd05      	RCALL	TOR
+00057d dbbd      	RCALL	DOLIT
+00057e 0000      	.DW		0
+00057f dd2e      	RCALL	OVER
+000580 df1c      	RCALL	COUNT
+000581 dd2c      	RCALL	OVER
+000582 dcde      	RCALL	CAT
+000583 dbb7      	RCALL	DOLIT
+000584 0024      	.DW		'$'
+000585 de21      	RCALL	EQUAL
+000586 dbd4      	RCALL	QBRAN
+000587 058d      	.DW		NUMQ1
+000588 dfca      	RCALL	HEX
+000589 dd1a      	RCALL	SWAPP
+00058a 9601      	adiw	tosl,1
+00058b dd18      	RCALL	SWAPP
+00058c 9701      	sbiw	tosl,1
+                 NUMQ1:
+00058d dd20      	RCALL	OVER
+00058e dcd2      	RCALL	CAT
+00058f dbab      	RCALL	DOLIT
+000590 002d      	.DW		'-'
+000591 de15      	RCALL	EQUAL
+000592 dcef      	RCALL	TOR
+000593 dd10      	RCALL	SWAPP
+000594 dcdf      	RCALL	RAT
+000595 de00      	RCALL	SUBB
+000596 dd0d      	RCALL	SWAPP
+000597 dcdc      	RCALL	RAT
+000598 ddd9      	RCALL	PLUS
+000599 ddb4      	RCALL	QDUP
+00059a dbc0      	RCALL	QBRAN
+00059b 05bd      	.DW		NUMQ6
+00059c 9701      	sbiw	tosl,1
+00059d dce4      	RCALL	TOR
+                 NUMQ2:
+00059e dcfe      	RCALL	DUPP
+00059f dce2      	RCALL	TOR
+0005a0 dcc0      	RCALL	CAT
+0005a1 dd51      	RCALL	BASE
+0005a2 dbea      	RCALL	AT
+0005a3 dfbc      	RCALL	DIGTQ
+0005a4 dbb6      	RCALL	QBRAN
+0005a5 05b6      	.DW		NUMQ4
+0005a6 dcfd      	RCALL	SWAPP
+0005a7 dd4b      	RCALL	BASE
+0005a8 dbe4      	RCALL	AT
+0005a9 dea6      	RCALL	STAR
+0005aa ddc7      	RCALL	PLUS
+0005ab dcbc      	RCALL	RFROM
+0005ac 9601      	adiw	tosl,1
+0005ad db9a      	RCALL	DONXT
+0005ae 059e      	.DW		NUMQ2
+0005af dce7      	RCALL	DROP
+0005b0 dcc3      	RCALL	RAT
+0005b1 dba9      	RCALL	QBRAN
+0005b2 05b4      	.DW		NUMQ3
+0005b3 ddd0      	RCALL	NEGAT
+                 NUMQ3:
+0005b4 dcef      	RCALL	SWAPP
+0005b5 c006      	RJMP	NUMQ5
+                 NUMQ4:
+0005b6 dcb1      	RCALL	RFROM
+0005b7 dcb0      	RCALL	RFROM
+0005b8 ddac      	RCALL	DDROP
+0005b9 ddab      	RCALL	DDROP
+0005ba db80      	RCALL	DOLIT
+0005bb 0000      	.DW		0
+                 NUMQ5:
+0005bc dce0      	RCALL	DUPP
+                 NUMQ6:
+0005bd dcaa      	RCALL	RFROM
+0005be dda6      	RCALL	DDROP
+0005bf dca8      	RCALL	RFROM
+0005c0 dd32      	RCALL	BASE
+0005c1 cbc1      	RJMP	STORE
+                 
+                 ;; Basic I/O
+                 
+                 ;   KEY	( -- c )
+                 ;	Wait for and return an input character.
+                 
+0005c2 0aec
+0005c3 4b03
+0005c4 5945      	COLON	3,"KEY"
+                 KEY:
+                 KEY1:
+0005c5 db4b      	RCALL	QRX
+0005c6 db94      	RCALL	QBRAN
+0005c7 05c5      	.DW		KEY1
+0005c8 9508      	RET
+                 
+                 ;   SPACE	( -- )
+                 ;	Send the blank character to the output device.
+                 
+0005c9 0b86
+0005ca 5305
+0005cb 4150
+0005cc 4543      	COLON	5,"SPACE"
+                 SPACE:
+0005cd dd77      	RCALL	BLANK
+0005ce cb56      	RJMP	EMIT
+                 
+                 ;   CHARS	( +n c -- )
+                 ;	Send n characters to the output device.
+                 
+                 ;	COLON	5,"CHARS"
+                 CHARS:
+0005cf dcd4      	RCALL	SWAPP
+0005d0 dcb1      	RCALL	TOR
+0005d1 c002      	RJMP	CHAR2
+                 CHAR1:
+0005d2 dcca      	RCALL	DUPP
+0005d3 db51      	RCALL	EMIT
+                 CHAR2:
+0005d4 db73      	RCALL	DONXT
+0005d5 05d2      	.DW		CHAR1
+0005d6 ccc0      	RJMP	DROP
+                 
+                 ;   SPACES	( +n -- )
+                 ;	Send n spaces to the output device.
+                 
+0005d7 0b94
+0005d8 5306
+0005d9 4150
+0005da 4543
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2038): macro 'COLON' called here
+0005db 0053      	COLON	6,"SPACES"
+                 SPACS:
+0005dc dd68      	RCALL	BLANK
+0005dd cff1      	RJMP	CHARS
+                 
+                 ;   TYPE	( b u -- )
+                 ;	Output u characters from b.
+                 
+0005de 0bb0
+0005df 5404
+0005e0 5059
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2046): macro 'COLON' called here
+0005e1 0045      	COLON	4,"TYPE"
+                 TYPES:
+0005e2 dc9f      	RCALL	TOR
+0005e3 c003      	RJMP	TYPE2
+                 TYPE1:
+0005e4 deb8      	RCALL	COUNT
+0005e5 de8a      	RCALL	TCHAR
+0005e6 db3e      	RCALL	EMIT
+                 TYPE2:
+0005e7 db60      	RCALL	DONXT
+0005e8 05e4      	.DW		TYPE1
+0005e9 ccad      	RJMP	DROP
+                 
+                 ;   ITYPE	( b u -- )
+                 ;	Output u characters from b.
+                 
+0005ea 0bbe
+0005eb 4905
+0005ec 5954
+0005ed 4550      	COLON	5,"ITYPE"
+                 ITYPES:
+0005ee dc93      	RCALL	TOR
+0005ef c003      	RJMP	ITYPE2
+                 ITYPE1:
+0005f0 deb9      	RCALL	ICOUNT
+0005f1 de7e      	RCALL	TCHAR
+0005f2 db32      	RCALL	EMIT
+                 ITYPE2:
+0005f3 db54      	RCALL	DONXT
+0005f4 05f0      	.DW		ITYPE1
+0005f5 cca1      	RJMP	DROP
+                 
+                 ;   CR	( -- )
+                 ;	Output a carriage return and a line feed.
+                 
+0005f6 0bd6
+0005f7 4302
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2078): macro 'COLON' called here
+0005f8 0052      	COLON	2,"CR"
+                 CR:
+0005f9 db41      	RCALL	DOLIT
+0005fa 000d      	.DW		CRR
+0005fb db29      	RCALL	EMIT
+0005fc db3e      	RCALL	DOLIT
+0005fd 000a      	.DW		LF
+0005fe cb26      	RJMP	EMIT
+                 
+                 ;   do$	( -- a )
+                 ;	Return the address of a compiled string.
+                 
+                 ;	COLON	COMPO+3,"do$"
+                 DOSTR:
+0005ff dc68      	RCALL	RFROM	;ra
+000600 dc67      	RCALL	RFROM	;ra a
+000601 dc9b      	RCALL	DUPP	;ra a a
+000602 dc9a      	RCALL	DUPP	;ra a a a
+000603 01fc      	movw	zl,tosl
+000604 0fee
+000605 1fff
+000606 9185
+000607 9195      	readflashcell	tosl,tosh
+000608 2799      	clr		tosh	;ra a a count
+000609 dd32      	RCALL	TWOSL
+00060a dd67      	RCALL	PLUS
+00060b 9601      	ADIW	TOSL,1	;ra a a' 
+00060c dc75      	RCALL	TOR	;ra a
+00060d dc96      	RCALL	SWAPP	;a ra
+00060e dc73      	RCALL	TOR	;a
+00060f dd26      	RCALL	CELLS	;byte address
+000610 9508      	RET
+                 
+                 ;   $"|	( -- a )
+                 ;	Run time routine compiled by $". Return address of a compiled string.
+                 
+                 ;	COLON	COMPO+3,'$'
+                 ;	.DB		'"','|'
+                 STRQP:
+000611 dfed      	RCALL	DOSTR
+000612 9508      	RET				;force a call to do$
+                 
+                 ;   ."|	( -- )
+                 ;	Run time routine of ." . Output a compiled string.
+                 
+                 ;	COLON	COMPO+3,'.'
+                 ;	.DB		'"','|'
+                 DOTQP:
+000613 dfeb      	RCALL	DOSTR
+000614 de95      	RCALL	ICOUNT
+000615 cfd8      	RJMP	ITYPES
+                 
+                 ;   .R		( n +n -- )
+                 ;	Display an integer in a field of n columns, right justified.
+                 
+000616 0bee
+000617 2e02
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2130): macro 'COLON' called here
+000618 0052      	COLON	2,".R"
+                 DOTR:
+000619 dc68      	RCALL	TOR
+00061a df2d      	RCALL	STR
+00061b dc4c      	RCALL	RFROM
+00061c dc91      	RCALL	OVER
+00061d dd78      	RCALL	SUBB
+00061e dfbd      	RCALL	SPACS
+00061f cfc2      	RJMP	TYPES
+                 
+                 ;   U.R	( u +n -- )
+                 ;	Display an unsigned integer in n column, right justified.
+                 
+000620 0c2e
+000621 5503
+000622 522e      	COLON	3,"U.R"
+                 UDOTR:
+000623 dc5e      	RCALL	TOR
+000624 def2      	RCALL	BDIGS
+000625 df08      	RCALL	DIGS
+000626 df1b      	RCALL	EDIGS
+000627 dc40      	RCALL	RFROM
+000628 dc85      	RCALL	OVER
+000629 dd6c      	RCALL	SUBB
+00062a dfb1      	RCALL	SPACS
+00062b cfb6      	RJMP	TYPES
+                 
+                 ;   U.	( u -- )
+                 ;	Display an unsigned integer in free format.
+                 
+00062c 0c42
+00062d 5502
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2158): macro 'COLON' called here
+00062e 002e      	COLON	2,"U."
+                 UDOT:
+00062f dee7      	RCALL	BDIGS
+000630 defd      	RCALL	DIGS
+000631 df10      	RCALL	EDIGS
+000632 df9a      	RCALL	SPACE
+000633 cfae      	RJMP	TYPES
+                 
+                 ;   .		( w -- )
+                 ;	Display an integer in free format, preceeded by a space.
+                 
+000634 0c5a
+000635 2e01      	COLON	1,"."
+                 DOT:
+000636 dcbc      	RCALL	BASE
+000637 db55      	RCALL	AT
+000638 db02      	RCALL	DOLIT
+000639 000a      	.DW	10
+00063a dc93      	RCALL	XORR	;?decimal
+00063b db1f      	RCALL	QBRAN
+00063c 063e      	.DW	DOT1
+00063d cff1      	RJMP	UDOT
+                 DOT1:	
+00063e df09      	RCALL	STR
+00063f df8d      	RCALL	SPACE
+000640 cfa1      	RJMP	TYPES
+                 
+                 ;   ?	( a -- )
+                 ;	Display the contents in a memory cell.
+                 
+000641 0c6a
+000642 3f01      	COLON	1,"?"
+                 QUEST:
+000643 db49      	RCALL	AT
+000644 cff1      	RJMP	DOT
+                 
+                 ;; Parsing
+                 
+                 ;   parse	( b u c -- b u delta ; <string> )
+                 ;	Scan string delimited by c. Return found string and its offset.
+                 
+                 ;	COLON	5,"parse"
+                 PARS:
+000645 dcb2      	RCALL	TEMP
+000646 db3c      	RCALL	STORE
+000647 dc66      	RCALL	OVER
+000648 dc39      	RCALL	TOR
+000649 dc53      	RCALL	DUPP
+00064a db10      	RCALL	QBRAN
+00064b 0687      	.DW		PARS8
+00064c 9701      	SBIW	TOSL,1
+00064d dcaa      	RCALL	TEMP
+00064e dc12      	RCALL	CAT
+00064f dcf5      	RCALL	BLANK
+000650 dd56      	RCALL	EQUAL
+000651 db09      	RCALL	QBRAN
+000652 0666      	.DW		PARS3
+000653 dc2e      	RCALL	TOR
+                 PARS1:
+000654 dcf0      	RCALL	BLANK
+000655 dc58      	RCALL	OVER
+000656 dc0a      	RCALL	CAT	;skip leading blanks ONLY
+000657 dd3e      	RCALL	SUBB
+000658 dc5d      	RCALL	ZLESS
+000659 dd22      	RCALL	INVER
+00065a db00      	RCALL	QBRAN
+00065b 0665      	.DW		PARS2
+00065c 9601      	ADIW	TOSL,1
+00065d daea      	RCALL	DONXT
+00065e 0654      	.DW		PARS1
+00065f dc08      	RCALL	RFROM
+000660 dc36      	RCALL	DROP
+000661 dad9      	RCALL	DOLIT
+000662 0000      	.DW		0
+000663 dc39      	RCALL	DUPP
+000664 9508      	RET
+                 PARS2:
+000665 dc02      	RCALL	RFROM
+                 PARS3:
+000666 dc47      	RCALL	OVER
+000667 dc3c      	RCALL	SWAPP
+000668 dc19      	RCALL	TOR
+                 PARS4:
+000669 dc8e      	RCALL	TEMP
+00066a dbf6      	RCALL	CAT
+00066b dc42      	RCALL	OVER
+00066c dbf4      	RCALL	CAT
+00066d dd28      	RCALL	SUBB	;scan for delimiter
+00066e dc89      	RCALL	TEMP
+00066f dbf1      	RCALL	CAT
+000670 dcd4      	RCALL	BLANK
+000671 dd35      	RCALL	EQUAL
+000672 dae8      	RCALL	QBRAN
+000673 0675      	.DW		PARS5
+000674 dc41      	RCALL	ZLESS
+                 PARS5:
+000675 dae5      	RCALL	QBRAN
+000676 067d      	.DW		PARS6
+000677 9601      	ADIW	TOSL,1
+000678 dacf      	RCALL	DONXT
+000679 0669      	.DW		PARS4
+00067a dc22      	RCALL	DUPP
+00067b dc06      	RCALL	TOR
+00067c c005      	RJMP	PARS7
+                 PARS6:
+00067d dbea      	RCALL	RFROM
+00067e dc18      	RCALL	DROP
+00067f dc1d      	RCALL	DUPP
+000680 9601      	ADIW	TOSL,1
+000681 dc00      	RCALL	TOR
+                 PARS7:
+000682 dc2b      	RCALL	OVER
+000683 dd12      	RCALL	SUBB
+000684 dbe3      	RCALL	RFROM
+000685 dbe2      	RCALL	RFROM
+000686 cd0f      	RJMP	SUBB
+                 PARS8:
+000687 dc26      	RCALL	OVER
+000688 dbdf      	RCALL	RFROM
+000689 cd0c      	RJMP	SUBB
+                 
+                 ;   PARSE	( c -- b u ; <string> )
+                 ;	Scan input stream and return counted string delimited by c.
+                 
+                 ;	COLON	5,"PARSE"
+                 PARSE:
+00068a dbf7      	RCALL	TOR
+00068b de32      	RCALL	TIB
+00068c dc76      	RCALL	INN
+00068d daff      	RCALL	AT
+00068e dce3      	RCALL	PLUS	;current input buffer pointer
+00068f dc79      	RCALL	NTIB
+000690 dafc      	RCALL	AT
+000691 dc71      	RCALL	INN
+000692 dafa      	RCALL	AT
+000693 dd02      	RCALL	SUBB	;remaining count
+000694 dbd3      	RCALL	RFROM
+000695 dfaf      	RCALL	PARS
+000696 dc6c      	RCALL	INN
+000697 cdfb      	RJMP	PSTOR
+                 
+                 ;   .(	( -- )
+                 ;	Output following string up to next ) .
+                 
+000698 0c84
+000699 2e82
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2300): macro 'COLON' called here
+00069a 0028      	COLON	IMEDD+2,".("
+                 DOTPR:
+00069b da9f      	RCALL	DOLIT
+00069c 0029      	.DW		')'
+00069d dfec      	RCALL	PARSE
+00069e cf43      	RJMP	TYPES
+                 
+                 ;   (	( -- )
+                 ;	Ignore following string up to next ) . A comment.
+                 
+00069f 0d32
+0006a0 2881      	COLON	IMEDD+1,"("
+                 PAREN:
+0006a1 da99      	RCALL	DOLIT
+0006a2 0029      	.DW		')'
+0006a3 dfe6      	RCALL	PARSE
+0006a4 ccc0      	RJMP	DDROP
+                 
+                 ;   \	( -- )
+                 ;	Ignore following text till the end of line.
+                 
+0006a5 0d40
+0006a6 5c81
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2320): macro 'COLON' called here
+0006a7 005c      	COLON	IMEDD+1,"\\"
+                 BKSLA:
+0006a8 da92      	RCALL	DOLIT
+0006a9 000d      	.DW		$D
+0006aa dfdf      	RCALL	PARSE
+0006ab ccb9      	RJMP	DDROP
+                 
+                 
+                 ;   CHAR	( -- c )
+                 ;	Parse next word and return its first character.
+                 
+0006ac 0d4c
+0006ad 4304
+0006ae 4148
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2331): macro 'COLON' called here
+0006af 0052      	COLON	4,"CHAR"
+                 CHARR:
+0006b0 dc94      	RCALL	BLANK
+0006b1 dfd8      	RCALL	PARSE
+0006b2 dbe4      	RCALL	DROP
+0006b3 cbad      	RJMP	CAT
+                 
+                 ;   TOKEN	( -- a ; <string> )
+                 ;	Parse a word from input stream and copy it to name dictionary.
+                 
+                 ;	COLON	5,"TOKEN"
+                 TOKEN:
+0006b4 dc90      	RCALL	BLANK
+0006b5 dfd4      	RCALL	PARSE
+0006b6 da84      	RCALL	DOLIT
+0006b7 001f      	.DW		31
+0006b8 dd1b      	RCALL	MIN
+0006b9 ddf8      	RCALL	HEREE
+0006ba dcb3      	RCALL 	DDUP
+0006bb db9b      	RCALL	CSTOR
+0006bc dcb1      	RCALL 	DDUP
+0006bd dcb4      	RCALL	PLUS
+0006be 9601      	ADIW	TOSL,1
+0006bf da7b      	RCALL	DOLIT
+0006c0 0000      	.DW		0
+0006c1 dbe2      	RCALL	SWAPP
+0006c2 db94      	RCALL	CSTOR
+0006c3 9601      	ADIW	TOSL,1
+0006c4 dbdf      	RCALL	SWAPP
+0006c5 de23      	RCALL	UMOVE
+0006c6 cdeb      	RJMP	HEREE
+                 
+                 ;   WORD	( c -- a ; <string> )
+                 ;	Parse a word from input stream and copy it to code dictionary.
+                 
+0006c7 0d5a
+0006c8 5704
+0006c9 524f
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2366): macro 'COLON' called here
+0006ca 0044      	COLON	4,"WORD"
+                 WORDD:
+0006cb dfbe      	RCALL	PARSE
+0006cc dde5      	RCALL	HEREE
+0006cd dca0      	RCALL 	DDUP
+0006ce db88      	RCALL	CSTOR
+0006cf dc9e      	RCALL 	DDUP
+0006d0 dca1      	RCALL	PLUS
+0006d1 9601      	ADIW	TOSL,1
+0006d2 da68      	RCALL	DOLIT
+0006d3 0000      	.DW		0
+0006d4 dbcf      	RCALL	SWAPP
+0006d5 db81      	RCALL	CSTOR
+0006d6 9601      	ADIW	TOSL,1
+0006d7 dbcc      	RCALL	SWAPP
+0006d8 ddf8      	RCALL	CMOVE
+0006d9 cdd8      	RJMP	HEREE
+                 
+                 ;; Dictionary search
+                 
+                 ;   NAME>	( na -- ca )
+                 ;	Return a code address given a name address.
+                 
+0006da 0d90
+0006db 4e05
+0006dc 4d41
+0006dd 3e45      	COLON	5,"NAME>"
+                 NAMET:
+0006de ddcb      	RCALL	ICOUNT
+0006df da5b      	RCALL	DOLIT
+0006e0 001f      	.DW		$1F
+0006e1 dbdc      	RCALL	ANDD
+0006e2 dc8f      	RCALL	PLUS
+0006e3 cc5b      	RJMP	ALGND
+                 
+                 ;   SAME?	( b a u -- b a f \ -0+ )
+                 ;	Compare u bytes in two strings. Return 0 if identical.
+                 
+                 ;	COLON	5,"SAME?"
+                 SAMEQ:
+0006e4 dc57      	RCALL	TWOSL
+0006e5 db9c      	RCALL	TOR
+0006e6 c010      	RJMP	SAME2
+                 SAME1:
+0006e7 dbc6      	RCALL	OVER
+0006e8 db8b      	RCALL	RAT
+0006e9 dc4c      	RCALL	CELLS
+0006ea dc87      	RCALL	PLUS
+0006eb daa1      	RCALL	AT
+0006ec dbc1      	RCALL	OVER
+0006ed db86      	RCALL	RAT
+0006ee dc47      	RCALL	CELLS
+0006ef dc82      	RCALL	PLUS
+0006f0 daa3      	RCALL	IAT
+0006f1 dca4      	RCALL	SUBB
+0006f2 dc5b      	RCALL	QDUP
+0006f3 da67      	RCALL	QBRAN
+0006f4 06f7      	.DW		SAME2
+0006f5 db72      	RCALL	RFROM
+0006f6 cba0      	RJMP	DROP
+                 SAME2:
+0006f7 da50      	RCALL	DONXT
+0006f8 06e7      	.DW		SAME1
+0006f9 da41      	RCALL	DOLIT
+0006fa 0000      	.DW		0
+0006fb 9508      	RET
+                 
+                 ;   find	( a va -- ca na | a F )
+                 ;	Search a vocabulary for a string. Return ca and na if succeeded.
+                 
+                 ;	COLON	4,"find"
+                 FIND:
+0006fc dba7      	RCALL	SWAPP
+0006fd db9f      	RCALL	DUPP
+0006fe db62      	RCALL	CAT
+0006ff dbf8      	RCALL	TEMP
+000700 da82      	RCALL	STORE
+000701 db9b      	RCALL	DUPP
+000702 da8a      	RCALL	AT
+000703 db7e      	RCALL	TOR
+000704 9602      	ADIW	TOSL,2	;va a+2 --
+000705 db9e      	RCALL	SWAPP	;a+2 va --
+                 FIND1:
+000706 db96      	RCALL	DUPP
+000707 da53      	RCALL	QBRAN
+000708 071b      	.DW		FIND6
+000709 db93      	RCALL	DUPP
+00070a da89      	RCALL	IAT
+00070b da2f      	RCALL	DOLIT
+00070c ff3f      	.DW		$FF3F
+00070d dbb0      	RCALL	ANDD
+00070e db65      	RCALL	RAT
+00070f dbbe      	RCALL	XORR
+000710 da4a      	RCALL	QBRAN
+000711 0716      	.DW		FIND2
+000712 9602      	ADIW	TOSL,2	;a+2 va+2 --
+000713 da27      	RCALL	DOLIT
+000714 ffff      	.DW		-1
+000715 c004      	RJMP	FIND3
+                 FIND2:
+000716 9602      	ADIW	TOSL,2	;a+2 va+2 --
+000717 dbe0      	RCALL	TEMP
+000718 da74      	RCALL	AT
+000719 dfca      	RCALL	SAMEQ
+                 FIND3:
+00071a c005      	RJMP	FIND4
+                 FIND6:
+00071b db4c      	RCALL	RFROM
+00071c db7a      	RCALL	DROP
+00071d db86      	RCALL	SWAPP
+00071e 9702      	SBIW	TOSL,2
+00071f cb84      	RJMP	SWAPP
+                 FIND4:
+000720 da3a      	RCALL	QBRAN
+000721 0725      	.DW		FIND5
+000722 9704      	SBIW	TOSL,4
+000723 da70      	RCALL	IAT
+000724 cfe1      	RJMP	FIND1
+                 FIND5:
+000725 db42      	RCALL	RFROM
+000726 db70      	RCALL	DROP
+000727 db7c      	RCALL	SWAPP
+000728 db6e      	RCALL	DROP
+000729 9702      	SBIW	TOSL,2
+00072a db72      	RCALL	DUPP
+00072b dfb2      	RCALL	NAMET
+00072c cb77      	RJMP	SWAPP
+                 
+                 ;   NAME?	( a -- ca na | a F )
+                 ;	Search all context vocabularies for a string.
+                 
+                 ;	COLON	5,"NAME?"
+                 NAMEQ:
+00072d dbf3      	RCALL	CNTXT
+00072e da5e      	RCALL	AT
+00072f cfcc      	RJMP	FIND
+                 
+                 ;; Terminal response
+                 
+                 ;   ^H	( bot eot cur -- bot eot cur )
+                 ;	Backup the cursor by one character.
+                 
+                 ;	COLON	2,"^H"
+                 BKSP:
+000730 db51      	RCALL	TOR
+000731 db7c      	RCALL	OVER
+000732 db35      	RCALL	RFROM
+000733 db70      	RCALL	SWAPP
+000734 db79      	RCALL	OVER
+000735 db98      	RCALL	XORR
+000736 da24      	RCALL	QBRAN
+000737 0741      	.DW		BACK1
+000738 da02      	RCALL	DOLIT
+000739 0008      	.DW		BKSPP
+00073a d9ea      	RCALL	EMIT
+00073b 9701      	SBIW	TOSL,1
+00073c dc08      	RCALL	BLANK
+00073d d9e7      	RCALL	EMIT
+00073e d9fc      	RCALL	DOLIT
+00073f 0008      	.DW		BKSPP
+000740 d9e4      	RCALL	EMIT
+                 BACK1:
+000741 9508      	RET
+                 
+                 ;   TAP	( bot eot cur c -- bot eot cur )
+                 ;	Accept and echo the key stroke and bump the cursor.
+                 
+                 ;	COLON	3,"TAP"
+                 TAP:
+000742 db5a      	RCALL	DUPP
+000743 d9e1      	RCALL	EMIT
+000744 db69      	RCALL	OVER
+000745 db11      	RCALL	CSTOR
+000746 9601      	adiw	tosl,1
+000747 9508      	ret
+                 
+                 ;   kTAP	( bot eot cur c -- bot eot cur )
+                 ;	Process a key stroke, CR or backspace.
+                 
+                 ;	COLON	4,"kTAP"
+                 KTAP:
+000748 db54      	RCALL	DUPP
+000749 970d      	SBIW	TOSL,CRR
+00074a da10      	RCALL	QBRAN
+00074b 0752      	.DW		KTAP2
+00074c 9708      	SBIW	TOSL,BKSPP
+00074d da0d      	RCALL	QBRAN
+00074e 0751      	.DW		KTAP1
+00074f dbf5      	RCALL	BLANK
+000750 cff1      	RJMP	TAP
+                 KTAP1:
+000751 cfde      	RJMP	BKSP
+                 KTAP2:
+000752 db44      	RCALL	DROP
+000753 db50      	RCALL	SWAPP
+000754 db42      	RCALL	DROP
+000755 cb47      	RJMP	DUPP
+                 
+                 ;   accept	( b u -- b u )
+                 ;	Accept characters to input buffer. Return with actual count.
+                 
+                 ;	COLON	6,"accept"
+                 ACCEP:
+000756 db57      	RCALL	OVER
+000757 dc1a      	RCALL	PLUS
+000758 db55      	RCALL	OVER
+                 ACCP1:
+000759 dc14      	RCALL	DDUP
+00075a db73      	RCALL	XORR
+00075b d9ff      	RCALL	QBRAN
+00075c 076a      	.DW		ACCP4
+00075d de67      	RCALL	KEY
+00075e db3e      	RCALL	DUPP
+00075f dbe5      	RCALL	BLANK
+000760 dc35      	RCALL	SUBB
+000761 d9d9      	RCALL	DOLIT
+000762 00ff      	.DW		$FF    ; $FF for chinese ; $5F  FOR ASCII CODE ; albert  2012/5/2 
+000763 dc4f      	RCALL	ULESS
+000764 d9f6      	RCALL	QBRAN
+000765 0768      	.DW		ACCP2
+000766 dfdb      	RCALL	TAP
+000767 c001      	RJMP	ACCP3
+                 ACCP2:
+000768 dfdf      	RCALL	KTAP
+                 ACCP3:
+000769 cfef      	RJMP	ACCP1
+                 ACCP4:
+00076a db2c      	RCALL	DROP
+00076b db42      	RCALL	OVER
+00076c cc29      	RJMP	SUBB
+                 
+                 ;   EXPECT	( b u -- )
+                 ;	Accept input stream and store count in SPAN.
+                 
+00076d 0db6
+00076e 4506
+00076f 5058
+000770 4345
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2597): macro 'COLON' called here
+000771 0054      	COLON	6,"EXPECT"
+                 EXPEC:
+000772 dfe3      	RCALL	ACCEP
+000773 db8a      	RCALL	SPAN
+000774 da0e      	RCALL	STORE
+000775 cb21      	RJMP	DROP
+                 
+                 ;   QUERY	( -- )
+                 ;	Accept input stream to terminal input buffer.
+                 
+000776 0edc
+000777 5105
+000778 4555
+000779 5952      	COLON	5,"QUERY"
+                 QUERY:
+00077a dd43      	RCALL	TIB
+00077b d9bf      	RCALL	DOLIT
+00077c 0050      	.DW		80
+00077d dfd8      	RCALL	ACCEP
+00077e db8a      	RCALL	NTIB
+00077f da03      	RCALL	STORE
+000780 db16      	RCALL	DROP
+000781 d9b9      	RCALL	DOLIT
+000782 0000      	.DW		0
+000783 db7f      	RCALL	INN
+000784 c9fe      	RJMP	STORE
+                 
+                 ;; Error handling
+                 
+                 
+                 ;   ERROR	( a -- )
+                 ;	Return address of a null string with zero count.
+                 
+000785 0eee
+000786 4505
+000787 5252
+000788 524f      	COLON	5,"ERROR"
+                 ERROR:
+000789 de43      	RCALL	SPACE
+00078a dd12      	RCALL	COUNT
+00078b de56      	RCALL	TYPES
+00078c d9ae      	RCALL	DOLIT
+00078d 003f      	.DW		$3F
+00078e d996      	RCALL	EMIT
+00078f d00d      	RCALL   ERR_HANDLING  ; CAHNGE   
+                 ABORT:
+000790 de68      	RCALL	CR
+000791 daad      	RCALL	EMPTY_BUF
+000792 efc0      	ldi 	yl,low(SPP)
+000793 e0d6      	ldi 	yh,high(SPP)
+000794 c063      	RJMP	QUIT
+000795 0f0c
+000796 450c
+000797 5252
+000798 485f
+000799 4e41
+00079a 4c44
+00079b 4e49
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2642): macro 'COLON' called here
+00079c 0047      COLON	12,"ERR_HANDLING" ; ADD FOR CHANGE 8 / 23  
+                 ERR_HANDLING:
+00079d 940c 0274     JMP  RAT
+00079f 0f2c
+0007a0 410a
+0007a1 4c4c
+0007a2 574f
+0007a3 425f
+0007a4 4f4f
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2645): macro 'COLON' called here
+0007a5 0054      COLON	10,"ALLOW_BOOT" ;  ADD FOR CHANGE 8 / 30 
+                 ALLOW_BOOT:
+0007a6 940c 0274     JMP  RAT
+0007a8 9508      	RET
+                 
+                 
+                 ;   abort"	( f -- )
+                 ;	Run time routine of ABORT" . Abort with a message.
+                 
+                 ;	COLON	COMPO+6,"abort"
+                 ;	.DB		'"'
+                 ABORQ:
+0007a9 d9b1      	RCALL	QBRAN
+0007aa 07b0      	.DW		ABOR1	;text flag
+0007ab de53      	RCALL	DOSTR
+0007ac dcfd      	RCALL	ICOUNT	;pass error string
+0007ad de40      	RCALL	ITYPES
+0007ae dfe1      	RCALL	ABORT
+0007af c048      	RJMP	QUIT
+                 ABOR1:
+0007b0 de4e      	RCALL	DOSTR
+0007b1 cae5      	RJMP	DROP
+                 
+                 ;; The text interpreter
+                 
+                 ;   $INTERPRET	( a -- )
+                 ;	Interpret a word. If failed, try to convert it to an integer.
+                 
+                 ;	COLON	10,"$INTERPRET"
+                 INTER:
+0007b2 df7a      	RCALL	NAMEQ
+0007b3 db9a      	RCALL	QDUP	;?defined
+0007b4 d9a6      	RCALL	QBRAN
+0007b5 07c4      	.DW		INTE1
+0007b6 d9dd      	RCALL	IAT
+0007b7 d983      	RCALL	DOLIT
+0007b8 0040      	.DW		COMPO
+0007b9 db04      	RCALL	ANDD	;?compile only lexicon bits
+0007ba dfee      	RCALL	ABORQ
+0007bb 200d
+0007bc 6f63
+0007bd 706d
+0007be 6c69
+0007bf 2065
+0007c0 6e6f
+0007c1 796c      	.DB		13," compile only"
+0007c2 d9b0      	RCALL	EXECU
+0007c3 9508      	RET	;execute defined word
+                 INTE1:
+0007c4 ddb5      	RCALL	NUMBQ
+0007c5 d995      	RCALL	QBRAN
+0007c6 07c8      	.DW		INTE2
+0007c7 9508      	RET
+                 INTE2:
+0007c8 cfc0      	RJMP	ERROR	;error
+                 
+                 ;   [	( -- )
+                 ;	Start the text interpreter.
+                 
+0007c9 0f40
+0007ca 5b81      	COLON	IMEDD+1,"["
+                 LBRAC:
+0007cb d96f      	RCALL	DOLIT
+0007cc 0f64      	.DW		INTER*2
+0007cd db47      	RCALL	TEVAL
+0007ce c9b4      	RJMP	STORE
+                 
+                 ;   .OK	( -- )
+                 ;	Display "ok" only while interpreting.
+                 
+                 ;	COLON	3,".OK"
+                 DOTOK:
+0007cf d96b      	RCALL	DOLIT
+0007d0 0f64      	.DW		INTER*2
+0007d1 db43      	RCALL	TEVAL
+0007d2 d9ba      	RCALL	AT
+0007d3 dbd3      	RCALL	EQUAL
+0007d4 d986      	RCALL	QBRAN
+0007d5 07da      	.DW		DOTO1
+0007d6 de3c      	RCALL	DOTQP
+0007d7 2004
+0007d8 6ea6
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2718): warning: .cseg .db misalignment - padding zero byte
+0007d9 0020      	.DB		4," 好 " ; 4, " ok " ; albert  2012/5/2
+0007da ce1e      DOTO1:	RJMP	CR
+                 
+                 ;   ?STACK	( -- )
+                 ;	Abort if the data stack underflows.
+                 
+                 ;	COLON	6,"?STACK"
+                 QSTAC:
+0007db dca5      	RCALL	DEPTH
+0007dc dad9      	RCALL	ZLESS	;check only for underflow
+0007dd dfcb      	RCALL	ABORQ
+0007de 200a
+0007df 6e75
+0007e0 6564
+0007e1 6672
+0007e2 6f6c
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2729): warning: .cseg .db misalignment - padding zero byte
+0007e3 0077      	.DB		10," underflow"
+0007e4 9508      	RET
+                 
+                 ;   EVAL	( -- )
+                 ;	Interpret the input stream.
+                 
+0007e5 0f94
+0007e6 4504
+0007e7 4156
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2735): macro 'COLON' called here
+0007e8 004c      	COLON	4,"EVAL"
+                 EVAL:
+0007e9 deca      EVAL1:	RCALL	TOKEN
+0007ea dab2      	RCALL	DUPP
+0007eb da75      	RCALL	CAT	;?input stream empty
+0007ec d96e      	RCALL	QBRAN
+0007ed 07f2      	.DW		EVAL2
+0007ee db26      	RCALL	TEVAL
+0007ef dcd7      	RCALL	ATEXE
+                 ;	RCALL	INTER
+0007f0 dfea      	RCALL	QSTAC	;evaluate input, check stack
+0007f1 cff7      	RJMP	EVAL1
+                 EVAL2:
+0007f2 daa4      	RCALL	DROP
+0007f3 cfdb      	RJMP	DOTOK
+                 
+                 ;; Shell
+                 
+                 ;   QUIT	( -- )
+                 ;	Reset return stack pointer and start text interpreter.
+                 
+0007f4 0fcc
+0007f5 5104
+0007f6 4955
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2756): macro 'COLON' called here
+0007f7 0054      	COLON	4,"QUIT"
+                 QUIT:
+                    
+0007f8 efa0      	ldi 	xl,low(RPP)
+0007f9 bfad      	out_ 	SPL,xl
+0007fa e0b7      	ldi 	xh,high(RPP)
+0007fb bfbe      	out_ 	SPH,xh
+0007fc d93e      	RCALL	DOLIT
+0007fd 0700      	.DW		TIBB
+0007fe db10      	RCALL	TTIB
+0007ff d983      	RCALL	STORE
+                 QUIT1:
+000800 dfca      	RCALL	LBRAC	;start interpretation
+                 QUIT2:
+000801 df78      	RCALL	QUERY	;get input
+000802 dfe6      	RCALL	EVAL
+                 	
+                 
+000803 cffd      	RJMP	QUIT2	;continue till error
+                 
+                 ;; The compiler
+                 
+                 ;   '	( -- ca )
+                 ;	Search context vocabularies for the next word in input stream.
+                 
+000804 0fea
+000805 2701      	COLON	1,"'"
+                 TICK:
+000806 dead      	RCALL	TOKEN
+000807 df25      	RCALL	NAMEQ	;?defined
+000808 d952      	RCALL	QBRAN
+000809 080b      	.DW		TICK1
+00080a 9508      	RET				;yes, push code address
+                 TICK1:
+00080b cf7d      	RJMP	ERROR	;no, error
+                 
+                 ;; Tools
+                 
+                 ;   DUMP	( a u -- )
+                 ;	Dump 128 bytes from ain RAM, in a formatted manner.
+                 
+00080c 100a
+00080d 4404
+00080e 4d55
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2796): macro 'COLON' called here
+00080f 0050      	COLON	4,"DUMP"
+                 DUMP:
+000810 d92a      	RCALL	DOLIT
+000811 0007      	.DW		7
+000812 da6f      	RCALL	TOR		;start count down loop
+000813 dde5      DUMP1:	RCALL	CR
+000814 da88      	RCALL	DUPP
+000815 d925      	RCALL	DOLIT
+000816 0005      	.DW		5
+000817 de0b      	RCALL	UDOTR
+000818 ddb4      	RCALL	SPACE
+000819 d921      	RCALL	DOLIT
+00081a 000f      	.DW		15
+00081b da66      	RCALL	TOR
+                 DUMP2:
+00081c dc80      	RCALL	COUNT
+00081d d91d      	RCALL	DOLIT
+00081e 0003      	.DW		3
+00081f de03      	RCALL	UDOTR
+000820 d927      	RCALL	DONXT	;display printable characters
+000821 081c      	.DW		DUMP2
+000822 ddaa      	RCALL	SPACE
+000823 da79      	RCALL	DUPP
+000824 d916      	RCALL	DOLIT
+000825 0010      	.DW		16
+000826 db6f      	RCALL	SUBB
+000827 d913      	RCALL	DOLIT
+000828 0010      	.DW		16
+000829 ddb8      	RCALL	TYPES
+00082a d91d      	RCALL	DONXT
+00082b 0813      	.DW		DUMP1	;loop till done
+00082c ca6a      	RJMP	DROP
+                 
+                 ;   IDUMP	( a -- )
+                 ;	Dump 128 bytes from a in flash, in a formatted manner.
+                 
+00082d 101a
+00082e 4905
+00082f 5544
+000830 504d      	COLON	5,"IDUMP"
+                 IDUMP:
+000831 d909      	RCALL	DOLIT
+000832 0007      	.DW		7
+000833 da4e      	RCALL	TOR	;start count down loop
+                 IDUMP1:
+000834 ddc4      	RCALL	CR
+000835 da67      	RCALL	DUPP
+000836 d904      	RCALL	DOLIT
+000837 0005      	.DW		5
+000838 ddea      	RCALL	UDOTR
+000839 dd93      	RCALL	SPACE
+00083a d900      	RCALL	DOLIT
+00083b 000f      	.DW		15
+00083c da45      	RCALL	TOR
+                 IDUMP2:
+00083d dc6c      	RCALL	ICOUNT
+00083e d8fc      	RCALL	DOLIT
+00083f 0003      	.DW		3
+000840 dde2      	RCALL	UDOTR
+000841 d906      	RCALL	DONXT	;display printable characters
+000842 083d      	.DW		IDUMP2
+000843 dd89      	RCALL	SPACE
+000844 da58      	RCALL	DUPP
+000845 d8f5      	RCALL	DOLIT
+000846 0010      	.DW		16
+000847 db4e      	RCALL	SUBB
+000848 d8f2      	RCALL	DOLIT
+000849 0010      	.DW		16
+00084a dda3      	RCALL	ITYPES
+00084b d8fc      	RCALL	DONXT
+00084c 0834      	.DW		IDUMP1	;loop till done
+00084d ca49      	RJMP	DROP
+                 
+                 
+                 ;   .S	( ... -- ... )
+                 ;	Display the contents of the data stack.
+                 
+00084e 105c
+00084f 2e02
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2870): macro 'COLON' called here
+000850 0053      	COLON	2,".S"
+                 DOTS:
+000851 dc2f      	RCALL	DEPTH	;stack depth
+000852 da2f      	RCALL	TOR	;start count down loop
+000853 c003      	RJMP	DOTS2	;skip first pass
+                 DOTS1:
+000854 da1f      	RCALL	RAT
+000855 dc35      	RCALL	PICK
+000856 dddf      	RCALL	DOT	;index stack, display contents
+                 DOTS2:
+000857 d8f0      	RCALL	DONXT 
+000858 0854      	.DW		DOTS1	;loop till done
+000859 ddb9      	RCALL	DOTQP
+00085a 2004
+00085b 733c
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2883): warning: .cseg .db misalignment - padding zero byte
+00085c 0070      	.DB		4," <sp"
+00085d 9508      	RET
+                 
+                 ;   >NAME	( ca -- na | F )
+                 ;	Convert code address to a name address.
+                 
+                 ;	COLON	5,">NAME"
+                 TNAME:
+00085e da23      	RCALL	TOR
+00085f dac1      	RCALL	CNTXT
+000860 d92c      	RCALL	AT	;na
+                 TNAM1:	
+000861 da3b      	RCALL	DUPP	;na na
+000862 d8f8      	RCALL	QBRAN
+000863 086e      	.DW		TNAM2
+000864 da38      	RCALL	DUPP	;na na
+000865 de78      	RCALL	NAMET	;na ca
+000866 da0d      	RCALL	RAT	;na ca ca
+000867 da66      	RCALL	XORR	;na f
+000868 d8f2      	RCALL	QBRAN
+000869 086e      	.DW		TNAM2
+00086a 9702      	SBIW	TOSL,2	;la
+00086b d928      	RCALL	IAT	;na'
+00086c d8f8      	RCALL	BRAN
+00086d 0861      	.DW		TNAM1
+                 TNAM2:
+00086e d9f9      	RCALL	RFROM	;na or 0
+00086f ca27      	RJMP	DROP
+                 
+                 ;   .ID	( na -- )
+                 ;	Display the name at address.
+                 
+                 ;	COLON	3,".ID"
+                 DOTID:
+000870 dc39      	RCALL	ICOUNT
+000871 d8c9      	RCALL	DOLIT
+000872 001f      	.DW		31
+000873 da4a      	RCALL	ANDD
+000874 cd79      	RJMP 	ITYPES
+                 
+                 ;   WORDS	( -- )
+                 ;	Display the names in the context vocabulary.
+                 
+000875 109e
+000876 5705
+000877 524f
+000878 5344      	COLON	5,"WORDS"
+                 WORDS:
+000879 dd7f      	RCALL	CR
+00087a daa6      	RCALL	CNTXT
+00087b d911      	RCALL	AT	;na
+                 WORS1:	
+00087c dad1      	RCALL	QDUP	;end of list?
+00087d d8dd      	RCALL	QBRAN
+00087e 0886      	.DW		WORS2
+00087f da1d      	RCALL	DUPP	;na na
+000880 dd4c      	RCALL	SPACE
+000881 dfee      	RCALL	DOTID	;display a name
+000882 9702      	SBIW	TOSL,2	;la
+000883 d910      	RCALL	IAT	;na'
+000884 d8e0      	RCALL	BRAN
+000885 087c      	.DW		WORS1
+                 WORS2:
+000886 9508      	RET
+                 
+                 
+                 ;; Hardware reset
+                 
+                 ;   hi	( -- )
+                 ;	Display the sign-on message of eForth.
+                 
+                 ;	COLON	2,"hi"
+                 HI:
+                 ;	RCALL	STOIO
+000887 dd71      	RCALL	CR
+000888 dd8a      	RCALL	DOTQP 	;initialize I/O
+000889 331d
+00088a 3832
+00088b 4665
+00088c 726f
+00088d 6874
+00088e bc20
+00088f c077
+000890 b14d
+000891 b8d0
+000892 b4ea
+000893 b8fa
+000894 aad5
+000895 20a9
+000896 3056
+000897 372e      	.DB		29,"328eForth 德霖教資測試版 V0.7"	;model ; 
+000898 cd60      	RJMP	CR
+                 
+                 ;   COLD	( -- )
+                 ;	The hilevel cold start sequence.
+                 
+000899 10ec
+00089a 4304
+00089b 4c4f
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(2962): macro 'COLON' called here
+00089c 0044      	COLON	4,"COLD"
+                 COLD:
+                 COLD1:
+00089d d890      	RCALL	STOIO	
+00089e d89c      	RCALL	DOLIT
+00089f 0100      	.DW		$100
+0008a0 d9fc      	RCALL	DUPP
+0008a1 940e 3feb 	CALL	READ	;initialize user area
+0008a3 d897      	RCALL	DOLIT	;init older buffer
+0008a4 011e      	.DW		OLDER
+0008a5 d8e7      	RCALL	AT		;
+0008a6 d95c      	RCALL	READ_FLASH
+0008a7 d975      	RCALL	SWITCH
+0008a8 d892      	RCALL	DOLIT	;init newer buffer
+0008a9 011e      	.DW		OLDER
+0008aa d8e2      	RCALL	AT		;
+0008ab d957      	RCALL	READ_FLASH
+0008ac d970      	RCALL	SWITCH
+0008ad dab7      	RCALL	DDROP   
+0008ae 940e 07a6 	CALL   ALLOW_BOOT ; M
+0008b0 da3c      	RCALL	TBOOT	
+0008b1 dc15      	RCALL	ATEXE
+0008b2 cf45      	RJMP	QUIT	;start interpretation
+                 
+                 
+                 
+                 .equ 	PAGESIZEB = PAGESIZE*2 ;PAGESIZEB is page size in BYTES, not words
+                 .def	spmcrval = r20
+                 .def	looplo = r22
+                 .def	loophi = r23
+                 
+                 ; Page Erase
+                 ;	ERASE ( a -- )
+                 ;	Erase a page of flash memory
+                 
+                 .SET _SAVE=pc
+                 
+                 .ORG $3FD0  ; BootLoader $3C00 ~ $3FD0 後面
+                 
+                 ;	COLON	5,"ERASE"
+                 ERASE:
+003fd0 01fc      	movw	zl,tosl
+003fd1 9189
+003fd2 9199      	loadtos
+                 ERASE_1:
+003fd3 e043      	ldi 	spmcrval, (1<<PGERS) | (1<<SELFPRGEN)
+003fd4 d022      	rcall 	Do_spm
+                 ; re-enable the RWW section
+003fd5 e141      	ldi 	spmcrval, (1<<RWWSRE) | (1<<SELFPRGEN)
+003fd6 c020      	rjmp 	Do_spm
+                 
+                 ; Page Write
+                 ; 	WRITE ( ram flash -- )	
+                 ; 	transfer data from RAM to Flash page buffer
+                 
+                 ;	COLON	5,"WRITE"
+                 WRITE:
+003fd7 01fc      	movw	zl, tosl
+003fd8 9189
+003fd9 9199      	loadtos
+003fda 01dc      	movw	xl, tosl
+003fdb 9189
+003fdc 9199      	loadtos
+                 WRITE_1:
+003fdd e860      	ldi 	looplo, low(PAGESIZEB) ;init loop variable
+                 Wrloop:
+003fde 900d      	ld 		r0, X+
+003fdf 901d      	ld 		r1, X+
+003fe0 e041      	ldi 	spmcrval, (1<<SELFPRGEN)
+003fe1 d015      	rcall 	Do_spm
+003fe2 9632      	adiw 	ZL, 2
+003fe3 5062      	subi 	looplo, 2 ;use subi for PAGESIZEB<=256
+003fe4 f7c9      	brne 	Wrloop
+                 ; execute Page Write
+003fe5 58e0      	subi 	ZL, low(PAGESIZEB) ;restore pointer
+003fe6 40f0      	sbci 	ZH, high(PAGESIZEB) ;not required for PAGESIZEB<=256
+003fe7 e045      	ldi 	spmcrval, (1<<PGWRT) | (1<<SELFPRGEN)
+003fe8 d00e      	rcall 	Do_spm
+                 ; re-enable the RWW section
+003fe9 e141      	ldi 	spmcrval, (1<<RWWSRE) | (1<<SELFPRGEN)
+003fea c00c      	rjmp 	Do_spm
+                 
+                 ; Page Read
+                 ; 	READ ( flash ram -- )	
+                 ; 	transfer data from Flash to RAM page buffer
+                 
+                 ;	COLON	4,"READ"
+                 READ:
+003feb 01dc      	movw	xl,tosl
+003fec 9189
+003fed 9199      	loadtos
+003fee 01fc      	movw	zl,tosl
+003fef 9189
+003ff0 9199      	loadtos
+                 READ_1:	
+                 ; read back and check, optional
+003ff1 e860      	ldi 	looplo, low(PAGESIZEB) ;init loop variable
+                 Rdloop:
+003ff2 9005      	lpm 	r0, Z+
+003ff3 920d      	st 		X+, r0
+003ff4 5061      	subi 	looplo, 1 ;use subi for PAGESIZEB<=256
+003ff5 f7e1       	brne 	Rdloop
+003ff6 9508      	ret
+                 
+                 Do_spm:
+                 ; check for previous SPM complete
+                 Wait_spm:
+003ff7 b717      	in 		temp1, SPMCSR
+003ff8 fd10      	sbrc 	temp1, SELFPRGEN
+003ff9 cffd      	rjmp 	Wait_spm
+                 ; SPM timed sequence
+003ffa bf47      	out 	SPMCSR, spmcrval
+003ffb 95e8      	spm
+003ffc 9508      	ret
+                 
+                 ;===============================================================
+                 ; Compiler
+                 
+                 ; .org	$100   ;
+                 .ORG _SAVE
+                 
+0008b3 1134
+0008b4 4505
+0008b5 4152
+0008b6 4553      	COLON	5,"ERASE"
+0008b7 940c 3fd0         JMP	ERASE
+0008b9 1168
+0008ba 5705
+0008bb 4952
+0008bc 4554      	COLON	5,"WRITE"
+0008bd 940c 3fd7         JMP	WRITE
+0008bf 1174
+0008c0 5204
+0008c1 4145
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3082): macro 'COLON' called here
+0008c2 0044      	COLON	4,"READ"
+0008c3 940c 3feb         JMP	READ
+                 
+                 ;   1+	( a -- a )
+                 ;	Add 1 to address.
+                 
+0008c5 1180
+0008c6 3102
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3088): macro 'COLON' called here
+0008c7 002b      	COLON	2,"1+"
+                 ONEP:
+0008c8 9601      	adiw	tosl,1
+0008c9 9508      	ret
+                 
+                 ;   1-	( a -- a )
+                 ;	Subtract 1 from address.
+                 
+0008ca 118c
+0008cb 3102
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3096): macro 'COLON' called here
+0008cc 002d      	COLON	2,"1-"
+                 ONEM:
+0008cd 9701      	sbiw	tosl,1
+0008ce 9508      	ret
+                 
+                 
+                 ;   2+	( a -- a )
+                 ;	Add cell size in byte to address.
+                 
+0008cf 1196
+0008d0 3202
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3105): macro 'COLON' called here
+0008d1 002b      	COLON	2,"2+"
+                 CELLP:
+0008d2 9602      	adiw	tosl,2
+0008d3 9508      	ret
+                 
+                 
+                 ;   2-	( a -- a )
+                 ;	Subtract cell size in byte from address.
+                 
+0008d4 11a0
+0008d5 3202
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3114): macro 'COLON' called here
+0008d6 002d      	COLON	2,"2-"
+                 CELLM:
+0008d7 9702      	sbiw	tosl,2
+0008d8 9508      	ret
+                 
+                 ; 	>	( n1 n2 -- flag ) Compare
+                 ; 	compares two values (signed)
+                 
+0008d9 11aa
+0008da 3e01      	COLON	1,">"
+                 GREATER:
+0008db 9129      	ld 		temp2, Y+
+0008dc 9139      	ld 		temp3, Y+
+0008dd 1728      	cp 		temp2, tosl
+0008de 0739      	cpc 	temp3, tosh
+0008df c00d      	rjmp 	DGRE1
+                 
+                 ; 	D>	( d1 d2 -- flag ) Compare
+                 ; 	compares two d values (signed)
+                 
+0008e0 11b4
+0008e1 4402
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3133): macro 'COLON' called here
+0008e2 003e      	COLON	2,"D>"
+                 DGRE:	
+0008e3 9109      	ld 		temp0, Y+
+0008e4 9119      	ld 		temp1, Y+
+0008e5 9129      	ld 		temp2, Y+
+0008e6 9139      	ld 		temp3, Y+
+0008e7 90e9      	ld 		temp4, Y+
+0008e8 90f9      	ld 		temp5, Y+
+0008e9 16e0      	cp 		temp4, temp0
+0008ea 06f1      	cpc 	temp5, temp1
+0008eb 0728      	cpc 	temp2, tosl
+0008ec 0739      	cpc 	temp3, tosh
+                 DGRE1:
+0008ed 01c1      	movw 	tosl,zerol
+0008ee f01c      	brlt 	DGRE2
+0008ef f011      	brbs 	1, DGRE2
+0008f0 9701      	sbiw 	tosl,1
+0008f1 9508      	ret
+                 DGRE2:
+0008f2 9508      	ret
+                 
+                 ; 	D+	( d1 d2 -- d3) Arithmetics
+                 ; 	add double cell values
+                 
+0008f3 11c2
+0008f4 4402
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3157): macro 'COLON' called here
+0008f5 002b      	COLON	2,"D+"
+                 DPLUS:
+0008f6 9129      	ld 		temp2, Y+
+0008f7 9139      	ld 		temp3, Y+
+0008f8 90e9      	ld 		temp4, Y+
+0008f9 90f9      	ld 		temp5, Y+
+0008fa 9149      	ld 		temp6, Y+
+0008fb 9159      	ld 		temp7, Y+
+0008fc 0f24      	add 	temp2, temp6
+0008fd 1f35      	adc 	temp3, temp7
+0008fe 1d8e      	adc 	tosl, temp4
+0008ff 1d9f      	adc 	tosh, temp5
+000900 933a      	st 		-Y, temp3
+000901 932a      	st 		-Y, temp2
+000902 9508      	ret
+                 
+                 ; 	D-	( d1 d2 -- d3 ) Arithmetics
+                 ; 	subtract double cell values
+                 
+000903 11e8
+000904 4402
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3176): macro 'COLON' called here
+000905 002d      	COLON	2,"D-"
+                 DMINUS:
+000906 9129      	ld 		temp2, Y+
+000907 9139      	ld 		temp3, Y+
+000908 90e9      	ld 		temp4, Y+
+000909 90f9      	ld 		temp5, Y+
+00090a 9149      	ld 		temp6, Y+
+00090b 9159      	ld 		temp7, Y+
+00090c 1b42      	sub 	temp6, temp2
+00090d 0b53      	sbc 	temp7, temp3
+00090e 0ae8      	sbc 	temp4, tosl
+00090f 0af9      	sbc 	temp5, tosh
+000910 935a      	st 		-Y, temp7
+000911 934a      	st 		-Y, temp6
+000912 01c7      	movw 	tosl, temp4
+000913 9508      	ret
+                 
+                 ;	ALLOT	( n -- )
+                 ;	Allocate n bytes to the code dictionary.
+                 
+000914 1208
+000915 4105
+000916 4c4c
+000917 544f      	COLON	5,"ALLOT"
+                 ALLOT:
+000918 940e 032b 	CALL	DPP
+00091a 940c 0493 	JMP		PSTOR
+                 
+                 ;   IALLOT	( n -- )
+                 ;	Allocate n bytes to the code dictionary.
+                 
+00091c 122a
+00091d 4906
+00091e 4c41
+00091f 4f4c
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3204): macro 'COLON' called here
+000920 0054      	COLON	6,"IALLOT"
+                 IALLOT:
+000921 940e 0326 	CALL	CPP
+000923 940c 0493 	JMP		PSTOR
+                 
+                 ;   ,	( w -- )
+                 ;	Compile an integer into the code dictionary.
+                 
+000925 123a
+000926 2c01      	COLON	1,","
+                 COMMA:
+000927 940e 0326 	CALL	CPP
+000929 940e 018d 	CALL	AT
+00092b 940e 029d 	CALL	DUPP
+00092d 940e 08d2 	CALL	CELLP	;cell boundary
+00092f 940e 0326 	CALL	CPP
+000931 940e 0183 	CALL	STORE
+000933 940c 01dd 	JMP		ISTOR
+                 
+                 ;   call,	( ca -- )
+                 ;	Assemble a call instruction to ca.
+                 
+                 ;	COLON	5,"call,"
+                 CALLC:
+000935 940e 013b 	CALL	DOLIT
+000937 940e      	.DW		CALLL
+000938 940e 0927 	CALL	COMMA
+00093a cfec      	RJMP	COMMA	;328 long call
+                 
+                 ;   [COMPILE]	( -- ; <string> )
+                 ;	Compile the next immediate word into code dictionary.
+                 
+00093b 124c
+00093c 5b89
+00093d 4f43
+00093e 504d
+00093f 4c49
+000940 5d45      	COLON	IMEDD+9,"[COMPILE]"
+                 BCOMP:
+000941 940e 0806 	CALL	TICK
+000943 940e 033c 	CALL	TWOSL
+000945 cfef      	RJMP	CALLC
+                 
+                 ;   COMPILE	( -- )
+                 ;	Compile the next address in colon list to code dictionary.
+                 
+000946 1278
+000947 4347
+000948 4d4f
+000949 4950
+00094a 454c      	COLON	COMPO+7,"COMPILE"
+                 COMPI:
+00094b 940e 0268 	CALL	RFROM
+00094d 940e 0336 	CALL	CELLS
+00094f 940e 029d 	CALL	DUPP
+000951 940e 018d 	CALL	AT
+000953 940e 0927 	CALL	COMMA	;compile call instruction
+000955 940e 08d2 	CALL	CELLP
+000957 940e 029d 	CALL	DUPP
+000959 940e 018d 	CALL	AT
+00095b 940e 0927 	CALL	COMMA	;compile address
+00095d 940e 08d2 	CALL	CELLP
+00095f 940e 033c 	CALL	TWOSL
+000961 940e 0282 	CALL	TOR
+000963 9508      	RET				;adjust return address
+                 
+                 ;   LITERAL	( w -- )
+                 ;	Compile tos to code dictionary as an integer literal.
+                 
+000964 128e
+000965 4c87
+000966 5449
+000967 5245
+000968 4c41      	COLON  IMEDD+7,"LITERAL" ; FIXED 2012/9/25
+                 LITER: 
+000969 940e 013b 	CALL	DOLIT
+00096b 013b      	.DW		DOLIT
+00096c 940e 0935 	CALL	CALLC
+00096e cfb8      	RJMP	COMMA
+                 
+                 ;   $,"	( -- )
+                 ;	Compile a literal string up to next " .
+                 
+                 ;	COLON	3,'$'
+                 ;	.DB		',','"'
+                 STRCQ:
+00096f 940e 013b 	CALL	DOLIT
+000971 0022      	.DW		'"'
+000972 940e 06cb 	CALL	WORDD	;move string to code dictionary
+000974 940e 029d 	CALL	DUPP
+000976 940e 0261 	CALL	CAT
+000978 940e 033c 	CALL	TWOSL
+00097a 940e 0282 	CALL	TOR
+                 STRCQ1:
+00097c 940e 029d 	CALL	DUPP
+00097e 940e 018d 	CALL	AT
+000980 940e 0927 	CALL	COMMA
+000982 940e 08d2 	CALL	CELLP
+000984 940e 0148 	CALL	DONXT
+000986 097c      	.DW		STRCQ1
+000987 940c 0297 	JMP		DROP
+                 
+                 ;; Structures
+                 
+                 ;   BEGIN	( -- a )
+                 ;	Start an infinite or indefinite loop structure.
+                 
+000989 12ca
+00098a 4285
+00098b 4745
+00098c 4e49      	COLON	IMEDD+5,"BEGIN"
+                 BEGIN:
+00098d 940e 0326 	CALL	CPP
+00098f 940c 018d 	JMP		AT
+                 
+                 ;   FOR	( -- a )
+                 ;	Start a FOR-NEXT loop structure in a colon definition.
+                 
+000991 1314
+000992 4683
+000993 524f      	COLON	IMEDD+3,"FOR"
+                 FOR:
+000994 940e 013b 	CALL	DOLIT
+000996 0282      	.DW		TOR
+000997 940e 0935 	CALL	CALLC
+000999 cff3      	RJMP	BEGIN
+                 
+                 ;   NEXT	( a -- )
+                 ;	Terminate a FOR-NEXT loop structure.
+                 
+00099a 1324
+00099b 4e84
+00099c 5845
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3315): macro 'COLON' called here
+00099d 0054      	COLON	IMEDD+4,"NEXT"
+                 NEXT:
+00099e 940e 013b 	CALL	DOLIT
+0009a0 0148      	.DW		DONXT
+0009a1 940e 0935 	CALL	CALLC
+0009a3 940e 033c 	CALL	TWOSL
+0009a5 cf81      	RJMP	COMMA
+                 
+                 ;   UNTIL	( a -- )
+                 ;	Terminate a BEGIN-UNTIL indefinite loop structure.
+                 
+0009a6 1336
+0009a7 5585
+0009a8 544e
+0009a9 4c49      	COLON	IMEDD+5,"UNTIL"
+                 UNTIL:
+0009aa 940e 013b 	CALL	DOLIT
+0009ac 015b      	.DW		QBRAN
+0009ad 940e 0935 	CALL	CALLC
+0009af 940e 033c 	CALL	TWOSL
+0009b1 cf75      	RJMP	COMMA
+                 
+                 ;   AGAIN	( a -- )
+                 ;	Terminate a BEGIN-AGAIN infinite loop structure.
+                 
+0009b2 134e
+0009b3 4185
+0009b4 4147
+0009b5 4e49      	COLON	IMEDD+5,"AGAIN"
+                 AGAIN:
+0009b6 940e 013b 	CALL	DOLIT
+0009b8 0165      	.DW		BRAN
+0009b9 940e 0935 	CALL	CALLC
+0009bb 940e 033c 	CALL	TWOSL
+0009bd cf69      	RJMP	COMMA
+                 
+                 ;   IF	( -- A )
+                 ;	Begin a conditional branch structure.
+                 
+0009be 1366
+0009bf 4982
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3348): macro 'COLON' called here
+0009c0 0046      	COLON	IMEDD+2,"IF"
+                 IFF:
+0009c1 940e 013b 	CALL	DOLIT
+0009c3 015b      	.DW		QBRAN
+0009c4 940e 0935 	CALL	CALLC
+0009c6 940e 098d 	CALL	BEGIN
+0009c8 940e 013b 	CALL	DOLIT
+0009ca 0002      	.DW		2
+0009cb cf55      	RJMP	IALLOT
+                 
+                 ;   AHEAD	( -- A )
+                 ;	Compile a forward branch instruction.
+                 
+                 ;	COLON	IMEDD+5,"AHEAD"
+                 AHEAD:
+0009cc 940e 013b 	CALL	DOLIT
+0009ce 0165      	.DW		BRAN
+0009cf 940e 0935 	CALL	CALLC
+0009d1 940e 098d 	CALL	BEGIN
+0009d3 940e 013b 	CALL	DOLIT
+0009d5 0002      	.DW		2
+0009d6 940c 0921 	JMP		IALLOT
+                 
+                 ;   REPEAT	( A a -- )
+                 ;	Terminate a BEGIN-WHILE-REPEAT indefinite loop.
+                 
+0009d8 137e
+0009d9 5286
+0009da 5045
+0009db 4145
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3374): macro 'COLON' called here
+0009dc 0054      	COLON	IMEDD+6,"REPEAT"
+                 REPEA:
+0009dd 940e 09b6 	CALL	AGAIN
+0009df 940e 098d 	CALL	BEGIN
+0009e1 940e 033c 	CALL	TWOSL
+0009e3 940e 02a4 	CALL	SWAPP
+0009e5 940c 01dd 	JMP		ISTOR
+                 
+                 ;   THEN	( A -- )
+                 ;	Terminate a conditional branch structure.
+                 
+0009e7 13b2
+0009e8 5484
+0009e9 4548
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3385): macro 'COLON' called here
+0009ea 004e      	COLON	IMEDD+4,"THEN"
+                 THENN:
+0009eb 940e 098d 	CALL	BEGIN
+0009ed 940e 033c 	CALL	TWOSL
+0009ef 940e 02a4 	CALL	SWAPP
+0009f1 940c 01dd 	JMP		ISTOR
+                 
+                 ;   AFT	( a -- a A )
+                 ;	Jump to THEN in a FOR-AFT-THEN-NEXT loop the first time through.
+                 
+0009f3 13d0
+0009f4 4183
+0009f5 5446      	COLON	IMEDD+3,"AFT"
+                 AFT:
+0009f6 940e 0297 	CALL	DROP
+0009f8 940e 09cc 	CALL	AHEAD
+0009fa 940e 098d 	CALL	BEGIN
+0009fc 940c 02a4 	JMP		SWAPP
+                 
+                 ;   ELSE	( A -- A )
+                 ;	Start the false clause in an IF-ELSE-THEN structure.
+                 
+0009fe 13e8
+0009ff 4584
+000a00 534c
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3405): macro 'COLON' called here
+000a01 0045      	COLON	IMEDD+4,"ELSE"
+                 ELSEE:
+000a02 940e 09cc 	CALL	AHEAD
+000a04 940e 02a4 	CALL	SWAPP
+000a06 940c 09eb 	JMP		THENN
+                 
+                 ;   WHILE	( a -- A a )
+                 ;	Conditional branch out of a BEGIN-WHILE-REPEAT loop.
+                 
+000a08 13fe
+000a09 5785
+000a0a 4948
+000a0b 454c      	COLON	IMEDD+5,"WHILE"
+                 WHILE:
+000a0c 940e 09c1 	CALL	IFF
+000a0e 940c 02a4 	JMP		SWAPP
+                 
+                 ;   ABORT"	( -- ; <string> )
+                 ;	Conditional abort with an error message.
+                 
+000a10 1412
+000a11 4186
+000a12 4f42
+000a13 5452      	COLON	IMEDD+6,"ABORT"
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3423): warning: .cseg .db misalignment - padding zero byte
+000a14 0022      	.DB		'"'
+                 ABRTQ:
+000a15 940e 013b 	CALL	DOLIT
+000a17 07a9      	.DW		ABORQ
+000a18 940e 0935 	CALL	CALLC
+000a1a 940e 096f 	CALL	STRCQ
+000a1c 9508      	RET
+                 
+                 ;   $"	( -- ; <string> )
+                 ;	Compile an inline string literal.
+                 
+000a1d 1422
+000a1e 2482      	COLON	IMEDD+2,'$'
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3435): warning: .cseg .db misalignment - padding zero byte
+000a1f 0022      	.DB		'"'
+                 STRQ:
+000a20 940e 013b 	CALL	DOLIT
+000a22 0611      	.DW		STRQP
+000a23 940e 0935 	CALL	CALLC
+000a25 940e 096f 	CALL	STRCQ
+000a27 9508      	RET
+                 
+                 ;   ."	( -- ; <string> )
+                 ;	Compile an inline string literal to be typed out at run time.
+                 
+000a28 143c
+000a29 2e82      	COLON	IMEDD+2,'.'
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3447): warning: .cseg .db misalignment - padding zero byte
+000a2a 0022      	.DB		'"'
+                 DOTQ:
+000a2b 940e 013b 	CALL	DOLIT
+000a2d 0613      	.DW		DOTQP
+000a2e 940e 0935 	CALL	CALLC
+000a30 940e 096f 	CALL	STRCQ
+000a32 9508      	RET
+                 
+                 ;; Name compiler
+                 
+                 ;   ?UNIQUE	( a -- a )
+                 ;	Display a warning message if the word already exists.
+                 
+                 ;	COLON	7,"?UNIQUE"
+                 UNIQU:
+000a33 940e 029d 	CALL	DUPP
+000a35 940e 072d 	CALL	NAMEQ	;?name exists
+000a37 940e 015b 	CALL	QBRAN
+000a39 0a46      	.DW		UNIQ1
+000a3a 940e 0613 	CALL	DOTQP	;redefinitions are OK
+000a3c 2007
+000a3d 6572
+000a3e 6544
+000a3f 2066      	.DB		7," reDef "	;but the user should be warned
+000a40 940e 02ae 	CALL	OVER
+000a42 940e 049d 	CALL	COUNT
+000a44 940e 05e2 	CALL	TYPES	;just in case its not planned
+                 UNIQ1:
+000a46 940c 0297 	JMP		DROP
+                 
+                 ;   $,n	( na -- )
+                 ;	Build a new dictionary name using the string at na.
+                 
+                 ;	COLON	3,"$,n"
+                 SNAME:
+000a48 940e 029d 	CALL	DUPP
+000a4a 940e 0261 	CALL	CAT	;?null input
+000a4c 940e 015b 	CALL	QBRAN
+000a4e 0a74      	.DW		SNAM2
+000a4f 940e 0a33 	CALL	UNIQU	;?redefinition
+000a51 940e 0331 	CALL	LAST
+000a53 940e 018d 	CALL	AT
+000a55 940e 0927 	CALL	COMMA	;compile link 
+000a57 940e 0326 	CALL	CPP
+000a59 940e 018d 	CALL	AT
+000a5b 940e 0331 	CALL	LAST
+000a5d 940e 0183 	CALL	STORE	;save new nfa in LAST	
+000a5f 940e 029d 	CALL	DUPP
+000a61 940e 0261 	CALL	CAT
+000a63 940e 033c 	CALL	TWOSL	;na count/2
+000a65 940e 0282 	CALL	TOR
+                 SNAME1:
+000a67 940e 029d 	CALL	DUPP
+000a69 940e 018d 	CALL	AT
+000a6b 940e 0927 	CALL	COMMA	;compile name
+000a6d 940e 08d2 	CALL	CELLP
+000a6f 940e 0148 	CALL 	DONXT
+000a71 0a67      	.DW		SNAME1
+000a72 940c 0297 	JMP		DROP
+                 SNAM2:
+000a74 940e 0611 	CALL	STRQP
+000a76 2005
+000a77 616e
+000a78 656d      	.DB		5," name"	;null input
+000a79 940c 0789 	JMP		ERROR
+                 
+                 ;; FORTH compiler
+                 
+                 ;   $COMPILE	( a -- )
+                 ;	Compile next word to code dictionary as a token or literal.
+                 
+                 ;	COLON	8,"$COMPILE"
+                 SCOMP:
+000a7b 940e 072d 	CALL	NAMEQ
+000a7d 940e 034e 	CALL	QDUP	;?defined
+000a7f 940e 015b 	CALL	QBRAN
+000a81 0a92      	.DW		SCOM2
+000a82 940e 0194 	CALL	IAT
+000a84 940e 013b 	CALL	DOLIT
+000a86 0080      	.DW		IMEDD
+000a87 940e 02be 	CALL	ANDD	;?immediate
+000a89 940e 015b 	CALL	QBRAN
+000a8b 0a8e      	.DW		SCOM1
+000a8c 940c 0173 	JMP		EXECU
+                 SCOM1:
+000a8e 940e 033c 	CALL	TWOSL
+000a90 940c 0935 	JMP		CALLC
+                 SCOM2:
+000a92 940e 057a 	CALL	NUMBQ
+000a94 940e 015b 	CALL	QBRAN
+000a96 0a99      	.DW		SCOM3
+000a97 940c 0969 	JMP		LITER
+                 SCOM3:
+000a99 940c 0789 	JMP		ERROR	;error
+                 
+                 ;   OVERT	( -- )
+                 ;	Link a new word into the current vocabulary.
+                 
+000a9b 1452
+000a9c 4f05
+000a9d 4556
+000a9e 5452      	COLON	5,"OVERT"
+                 OVERT:
+000a9f 940e 0331 	CALL	LAST
+000aa1 940e 018d 	CALL	AT
+000aa3 940e 0321 	CALL	CNTXT
+000aa5 940c 0183 	JMP		STORE
+                 
+                 ;   ;	( -- )
+                 ;	Terminate a colon definition.
+                 
+000aa7 1538
+000aa8 3bc1      	COLON	IMEDD+COMPO+1,";"
+                 SEMIS:
+000aa9 940e 013b 	CALL	DOLIT
+000aab 9508      	.DW		RETT
+000aac 940e 0927 	CALL	COMMA
+000aae 940e 07cb 	CALL	LBRAC
+000ab0 940c 0a9f 	JMP		OVERT
+                 
+                 ;   ]	( -- )
+                 ;	Start compiling the words in the input stream.
+                 
+000ab2 1550
+000ab3 5d01      	COLON	1,"]"
+                 RBRAC:
+000ab4 940e 013b 	CALL	DOLIT
+000ab6 14f6      	.DW		SCOMP*2
+000ab7 940e 0315 	CALL	TEVAL
+000ab9 940c 0183 	JMP		STORE
+                 
+                 ;   :	( -- ; <string> )
+                 ;	Start a new colon definition using next word as its name.
+                 
+000abb 1566
+000abc 3a01      	COLON	1,":"
+                 COLONN:
+000abd 940e 06b4 	CALL	TOKEN
+000abf 940e 0a48 	CALL	SNAME
+000ac1 940c 0ab4 	JMP		RBRAC
+                 
+                 ;   IMMEDIATE	( -- )
+                 ;	Make the last compiled word an immediate word.
+                 
+000ac3 1578
+000ac4 4909
+000ac5 4d4d
+000ac6 4445
+000ac7 4149
+000ac8 4554      	COLON	9,"IMMEDIATE"
+                 IMMED:
+000ac9 940e 013b 	CALL	DOLIT
+000acb 0080      	.DW		IMEDD
+000acc 940e 0331 	CALL	LAST
+000ace 940e 018d 	CALL	AT
+000ad0 940e 0194 	CALL	IAT
+000ad2 940e 02c6 	CALL	ORR
+000ad4 940e 0331 	CALL	LAST
+000ad6 940e 018d 	CALL	AT
+000ad8 940c 01dd 	JMP		ISTOR
+                 
+                 ;; Defining words
+                 
+                 ;   CREATE	( -- ; <string> )
+                 ;	Compile a new array entry without allocating code space.
+                 
+000ada 1588
+000adb 4306
+000adc 4552
+000add 5441
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3597): macro 'COLON' called here
+000ade 0045      	COLON	6,"CREATE"
+                 CREAT:
+000adf 940e 06b4 	CALL	TOKEN
+000ae1 940e 0a48 	CALL	SNAME
+000ae3 940e 0a9f 	CALL	OVERT
+000ae5 940e 013b  	CALL	DOLIT
+000ae7 02e0      	.DW		DOVAR
+000ae8 940e 0935 	CALL	CALLC
+000aea 940e 032b 	CALL	DPP
+000aec 940e 018d 	CALL	AT
+000aee 940c 0927 	JMP		COMMA
+                 
+                 ;   CONSTANT	( n -- ; <string> )
+                 ;	Compile a constant.
+                 
+000af0 15b6
+000af1 4308
+000af2 4e4f
+000af3 5453
+000af4 4e41
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3612): macro 'COLON' called here
+000af5 0054      	COLON	8,"CONSTANT"
+                 CONST:
+000af6 940e 06b4 	CALL	TOKEN
+000af8 940e 0a48 	CALL	SNAME
+000afa 940e 0a9f 	CALL	OVERT
+000afc 940e 013b  	CALL	DOLIT
+000afe 02e0      	.DW		DOVAR
+000aff 940e 0935 	CALL	CALLC
+000b01 940c 0927 	JMP		COMMA
+                 
+                 ;   VARIABLE	( -- ; <string> )
+                 ;	Compile a new variable uninitialized.
+                 
+000b03 15e2
+000b04 5608
+000b05 5241
+000b06 4149
+000b07 4c42
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3625): macro 'COLON' called here
+000b08 0045      	COLON	8,"VARIABLE"
+                 VARIA:
+000b09 940e 0adf 	CALL	CREAT
+000b0b 940e 013b 	CALL	DOLIT
+000b0d 0002      	.DW		2
+000b0e 940c 0918 	JMP		ALLOT
+                 
+                 ; ======= M
+000b10 1608
+000b11 2703
+000b12 4e43      	COLON	3,"'CN"
+                 TICKCN:
+000b13 940e 06b4 	CALL	TOKEN
+000b15 940e 072d 	CALL	NAMEQ	;?defined
+000b17 940e 036e 	CALL    DDUP
+000b19 940e 015b 	CALL	QBRAN
+000b1b 080b      	.DW		TICK1
+000b1c 940e 0297     CALL    DROP  
+000b1e 9508      	RET				;yes, push code address
+                 TICK1CN:
+000b1f 940c 0789 	JMP	ERROR	;no, error
+                 
+000b21 1622
+000b22 4f08
+000b23 4550
+000b24 5f4e
+000b25 4e49
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(159): warning: .cseg .db misalignment - padding zero byte
+D:\!_forth\arduino-1.0\328eForth\328eForthDEV0.7\src\328eForth.asm(3645): macro 'COLON' called here
+000b26 0054      	COLON	8,"OPEN_INT"
+                 OPEN_INT: 
+000b27 940e 013b 	CALL	DOLIT	
+000b29 005f      	.DW		$5F
+000b2a 940e 0261     CALL    CAT
+000b2c 940e 013b 	CALL	DOLIT	
+000b2e 0080      	.DW		$80
+000b2f 940e 02c6 	CALL    ORR
+000b31 940e 013b     CALL	DOLIT	
+000b33 005f      	.DW		$5F
+000b34 940e 0257     CALL	CSTOR
+000b36 940e 013b 	CALL	DOLIT
+000b38 0064          .DW		$64
+000b39 940e 0282 	CALL	TOR
+                 REDO:
+000b3b 940e 0148 	CALL	DONXT   
+000b3d 0b3b          .DW		REDO
+                 
+000b3e 940e 013b 	CALL	DOLIT	
+000b40 005f      	.DW		$5F
+000b41 940e 0261     CALL    CAT
+000b43 940e 013b 	CALL	DOLIT	
+000b45 007f      	.DW		$7F
+000b46 940e 02be 	CALL    ANDD
+000b48 940e 013b     CALL	DOLIT	
+000b4a 005f      	.DW		$5F
+000b4b 940e 0257     CALL	CSTOR
+000b4d 9508      	RET
+                 ;============================================================================
+                 
+                 .EQU	LASTN	=	_LINK*2	;last name address in name dictionary
+                 
+                 .EQU	DTOP	=	$140	;next available memory in name dictionary
+                 .EQU	CTOP	=	pc*2	;next available memory in code dictionary
+                 ;===============================================================
+                 
+                 
+                 
+                 
+                 
+
+
+RESOURCE USE INFORMATION
+------------------------
+
+Notice:
+The register and instruction counts are symbol table hit counts,
+and hence implicitly used resources are not counted, eg, the
+'lpm' instruction without operands implicitly uses r0 and z,
+none of which are counted.
+
+x,y,z are separate entities in the symbol table and are
+counted separately from r26..r31 here.
+
+.dseg memory usage only counts static data declared with .byte
+
+ATmega328P register use summary:
+r0 :   7 r1 :   4 r2 :   6 r3 :   3 r4 :  10 r5 :   0 r6 :   0 r7 :   0 
+r8 :   0 r9 :   0 r10:   1 r11:   1 r12:   0 r13:   0 r14:  10 r15:   8 
+r16:  20 r17:  13 r18:  21 r19:  20 r20:  13 r21:   8 r22:   4 r23:   0 
+r24: 144 r25:  73 r26:  42 r27:  26 r28:   4 r29:   2 r30:  36 r31:  21 
+x  :   3 y  : 128 z  :  23 
+Registers used: 27 out of 35 (77.1%)
+
+ATmega328P instruction use summary:
+.lds  :   0 .sts  :   0 adc   :  10 add   :   6 adiw  :  27 and   :   2 
+andi  :   1 asr   :   2 bclr  :   0 bld   :   0 brbc  :   0 brbs  :   1 
+brcc  :   0 brcs  :   1 break :   0 breq  :   2 brge  :   2 brhc  :   0 
+brhs  :   0 brid  :   0 brie  :   0 brlo  :   0 brlt  :   1 brmi  :   0 
+brne  :   3 brpl  :   0 brsh  :   0 brtc  :   0 brts  :   0 brvc  :   0 
+brvs  :   0 bset  :   0 bst   :   0 call  : 186 cbi   :   0 cbr   :   0 
+clc   :   0 clh   :   0 cli   :   0 cln   :   0 clr   :  16 cls   :   0 
+clt   :   0 clv   :   0 clz   :   0 com   :   2 cp    :   3 cpc   :   6 
+cpi   :   0 cpse  :   0 dec   :   1 eor   :   2 fmul  :   0 fmuls :   0 
+fmulsu:   0 icall :   0 ijmp  :   0 in    :   3 inc   :   1 jmp   :  37 
+ld    :  88 ldd   :   2 ldi   :  20 lds   :   3 lpm   :  17 lsl   :   8 
+lsr   :   0 mov   :   2 movw  :  29 mul   :   4 muls  :   0 mulsu :   0 
+neg   :   0 nop   :   0 or    :   4 ori   :   0 out   :   7 pop   :  26 
+push  :  26 rcall : 845 ret   :  92 reti  :   2 rjmp  : 127 rol   :  12 
+ror   :   4 sbc   :   5 sbci  :   1 sbi   :   0 sbic  :   0 sbis  :   0 
+sbiw  :  17 sbr   :   0 sbrc  :   1 sbrs  :   2 sec   :   0 seh   :   0 
+sei   :   0 sen   :   0 ser   :   2 ses   :   0 set   :   0 sev   :   0 
+sez   :   0 sleep :   0 spm   :   2 st    :  46 std   :   2 sts   :   5 
+sub   :   3 subi  :   3 swap  :   0 tst   :   1 wdr   :   0 
+Instructions used: 54 out of 113 (47.8%)
+
+ATmega328P memory use summary [bytes]:
+Segment   Begin    End      Code   Data   Used    Size   Use%
+---------------------------------------------------------------
+[.cseg] 0x000000 0x007ffa   3904   1728   5632   32768  17.2%
+[.dseg] 0x000100 0x000100      0      0      0    2048   0.0%
+[.eseg] 0x000000 0x000000      0      0      0    1024   0.0%
+
+Assembly complete, 0 errors, 90 warnings

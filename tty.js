@@ -5,6 +5,7 @@ _o=function(f){console.log(_t(),'\t\t\t\t\t'.substr(0,--_I)+'<--',f)}
 _i('tty.js')
 //var fs =require('fs')
 //var sys=require('sys')
+var time=document.getElementById('time')
 var comport=document.getElementById('comport')
 var comp=comport.value
 var com_o=document.getElementById('com_o')
@@ -40,7 +41,9 @@ var output=function(txt) {
 	console.log(txt)
     inputText.focus()
     serialText=''
+    time.innerHTML=Date()+' '+inputText.value.length
 }
+var waitingString=''
 var login 		=function() {						// 試與 comp 建立連線
 	if (!active) {
 		serialPort = new seri.SerialPort(comp,{baudrate: rate})
@@ -57,11 +60,20 @@ var login 		=function() {						// 試與 comp 建立連線
         		if (out.innerHTML.match(/^hello/)) out.innerHTML=''
         		output(_t()+" 連 "+comp+" 速度 "+rate)
         	}
+            if (!waitingString) { // 若無錯誤發生, waitingString==='' 表示 等按任意鍵
+                
+            } else { // 若無錯誤發生, waitingString!=='' 表示 等指定字串
+
+            }
         	serialText+=data.toString()
+            if (inp===undefined) {
+                serialText=serialText.replace('�w�M�и����ժ�','德霖教資測試版')
+            }
     		if (inp&&inp===serialText.substr(0,inp.length)) {
     			console.log(comp,'-=>',JSON.stringify(serialText))
     			output('<font color=blue>'+inp+'</font>'+serialText.substr(inp.length))
     			inp=''
+                inputText.value='' // 若 key in \r 會留下不需要的 \n
     			return
     		}
         	error=serialText.match(
