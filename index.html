@@ -1,0 +1,56 @@
+<!-- localhost:4700 20130806 yap & sam -->
+<!DOCTYPE html>
+<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8'>
+<script data-main='tty' src= 'require-jquery.js'></script>
+<!-- 網頁主體板面 div 規劃 請參閱 BOOTSTRAP http://getbootstrap.com 相關說明 -->
+<link href='./css/bootstrap.css' rel='stylesheet'>
+<script src='./js/bootstrap.js'></script>
+</head>
+<body bgcolor='yellow'>
+  <div class='row'>
+    <div class='col-lg-1'><center>
+      <a class='btn' disabled='true' id='com_o'>comp --></a></center>
+    </div>
+    <div class='col-lg-11'>
+      <div class='panel panel-success'>
+        <div id='out' style='height: 422px;overflow:auto'></div>
+      </div>
+    </div>
+  </div>
+  <div class='row'>
+    <div class='col-lg-1'><center>
+        <a class='btn btn-primary' id='i_com' onclick='inputToComport()'>--> comp</a></center>
+    </div>
+    <div class='col-lg-7'><center>
+        <textarea id='inputText' class='form-control' rows='1' onkeydown='inputTextKeydown(event)'></textarea>
+    </div>
+    <div class='col-lg-1'><center>
+        <a class='btn btn-primary' id='f_com' onclick='fileToComport()'>>>> comp</a></center>
+    </div>
+    <div class='col-lg-3'><center>
+        <textarea id='fileName' class='form-control' rows='1' onkeydown='fileNameKeydown(event)'>test.f</textarea></center>
+    </div>
+  </div>
+  <div class='row'>
+    <div class='col-lg-1'><center>
+        <a class='btn' disabled='true'>time Stemp</a>
+    </div>
+    <div class='col-lg-5'>
+        <div class='panel panel-success'><center>
+            <div id='time'>Tue Aug 06 2013 23:55:51 GMT+0800 (台北標準時間)</div>
+        </div>
+    </div>
+    <div class='col-lg-1'><center>
+        <a class='btn' disabled='true'>com Port</a>
+    </div>
+    <div class='col-lg-2'><center>
+        <textarea id='comport' class='form-control' rows='1' onkeydown='comportKeydown(event)'>com5</textarea>
+    </div>
+    <div class='col-lg-1'><center>
+        <a class='btn' disabled='true'>baud Rate</a>
+    </div>
+    <div class='col-lg-2'><center>
+        <textarea id='baud' class='form-control' rows='1' onkeydown='baudKeydown(event)'>19200</textarea>
+    </div>
+  </div>
+</body></html>
