@@ -1,26 +1,21 @@
-_I=0
-_t=function(){return Date().substr(0,24)}
-_i=function(f){console.log(_t(),'\t\t\t\t\t'.substr(0,_I++)+'-->',f)}
-_o=function(f){console.log(_t(),'\t\t\t\t\t'.substr(0,--_I)+'<--',f)}
-_i('tty.js')
-//var fs =require('fs')
-//var sys=require('sys')
-var time=document.getElementById('time')
-var comport=document.getElementById('comport')
+define([], function() {
+var time   =document.getElementById('time')   // showing time stampe
+var comport=document.getElementById('comport')// comp name input box
+var baud   =document.getElementById('baud')   // comp rate input box
 var comp=comport.value
-var com_o=document.getElementById('com_o')
+var com_o  =document.getElementById('com_o')  // btn showing comp data
 com_o.innerHTML=comp+' -->'
-var i_com=document.getElementById('i_com')
+var i_com  =document.getElementById('i_com')  // btn forth comand load
 i_com.innerHTML="--> "+comp
-var f_com=document.getElementById('f_com')
+var f_com  =document.getElementById('f_com')  // btn forth file load
 f_com.innerHTML="->> "+comp
-var baud=document.getElementById('baud')
 var rate=parseInt(baud.value)
 var inputText=document.getElementById('inputText')
 var fileName=document.getElementById('fileName')
 var out=document.getElementById('out')
 out.innerHTML='hello! This is shown from script'
 var seri=require('serialport')
+var fs=require('fs')
 var active=false
 var timer
 /*
@@ -43,8 +38,8 @@ var output=function(txt) {
     serialText=''
     time.innerHTML=Date()+' '+inputText.value.length
 }
-var waitingString='', ws_Compiling=/\n$/
-var login=function() {						// 試與 comp 建立連線
+var waitingString=''
+var login 		=function() {						// 試與 comp 建立連線
 	if (!active) {
 		serialPort = new seri.SerialPort(comp,{baudrate: rate})
         output(_t()+" 試 "+comp+" 速度 "+rate)
@@ -81,7 +76,7 @@ var login=function() {						// 試與 comp 建立連線
         	if (error) {
         		console.log(comp,'-=>',JSON.stringify(serialText))
         		output(serialText.split(error[0])[0]+
-        			'<font color=red>'+error[0]+'</font>')
+        			'<font color=red>'+warning[parseInt(error[1])]+'</font>')
         		return
         	}
         	chr=serialText.charAt(serialText.length-1)
@@ -120,13 +115,6 @@ var inputToComport=function(){
 	console.log(JSON.stringify(inp+'\r'),'-=> com5')
 	inputText.value=''
 }
-var fileToComport=function(){
-	var lines=fs.readFileSync(filename.value).toString().split('\r\n')
-	inputs.push(inp)
-	serialPort.write(inp+'\r')
-	console.log(JSON.stringify(inp+'\r'),'-=> com5')
-	inputText.value=''
-}
 /*
 var nchar=0
 process.openStdin().addListener("data",function(data){
@@ -138,3 +126,5 @@ process.openStdin().addListener("data",function(data){
 setTimeout(login,500)
 setTimeout(inputToComport,5000)
 _o('tty.js')
+    })
+})

@@ -1,25 +1,7 @@
-DECIMAL
-VARIABLE V 1000 V !
-5 PB OUTPUT
-: W V @ MS ;
-: H 5 PB HIGH ;
-: L 5 PB LOW ;
-: F H W L W ;
-\ FORGET Z
-: Z 
-  BEGIN F ?KEY DUP
-    IF OVER $2B = \ is key + ?
-	   IF V @ 2* V ! 2DROP 0
-	   ELSE OVER $2D = \ is key - ?
-	        IF V @ 2/ V ! 2DROP 0
-			THEN
-	   THEN
-	THEN
-  UNTIL ;
-
 \ auto_flush
-\ Forget DEPTH_CHECK Forget DEPTH_CHECK Forget DEPTH_CHECK
-\ : Forget 'CN 2- DUP CP ! I@ DUP CONTEXT ! LAST ! DROP ;
+\ 
+Forget Forget
+: Forget 'CN 2- DUP CP ! I@ DUP CONTEXT ! LAST ! DROP ;
 VARIABLE DEPTH_CHECK FLUSH 
 : :  : DEPTH   DEPTH_CHECK  ! ; FLUSH
 : VARIABLE VARIABLE  FLUSH ;
@@ -80,8 +62,6 @@ HEX
  UNTIL XOR ; 
 
 : REMEMBER 100 ERASE 100 100 WRITE 180 ERASE 180 180 WRITE ;
-: Forget ( <name> -- )
-  'CN 2- DUP CP ! I@ DUP CONTEXT ! LAST ! DROP ;
 
 \ 以下為毛翔先生2012/8/23於德霖技術學院202實驗室修改，
 \ 此處置之目的為防止有TURNKEY時，。
@@ -171,16 +151,16 @@ CREATE LIMIT 2 ALLOT FLUSH
 : DUP_2+_SWAP_I@ ( a -- a+2 [a] )
  DUP 2+ SWAP I@ ; 
 940E CONSTANT INS_CALL 
-940C CONSTANT INS_JUMP 
-9508 CONSTANT INS_RET \ HEX Forget (LIT)
- 13B 2* CONSTANT (LIT)
- 14B 2* CONSTANT (NEXT)
- 15B 2* CONSTANT (ZBRAN)
- 165 2* CONSTANT (BRAN)
- 7A9 2* CONSTANT (ABORT")
- 611 2* CONSTANT ($")
- 613 2* CONSTANT (.") 
- 2E0 2* CONSTANT (CON)
+940C CONSTANT INS_JUMP \ HEX Forget INS_RET
+9508 CONSTANT INS_RET
+' doLIT   CONSTANT DOLIT
+' ."|	  CONSTANT DOTQP
+' $"|	  CONSTANT STRQP
+' abort"  CONSTANT ABORQ
+' ?branch CONSTANT QBRAN
+' branch  CONSTANT BRAN
+' next    CONSTANT DONXT
+' doVAR   CONSTANT DOVAR
 : ALIGNED ( a -- b ) \ align addr to cell boundary
   DUP 1 AND + ;
 : H. ( v -- ) <# #S #> TYPE ; 
@@ -198,26 +178,26 @@ CREATE LIMIT 2 ALLOT FLUSH
    IF ."  [COMPILE]"
    THEN ( [a] a+4 cfa nfa )
    .ID SPACE ( [a] a+4 cfa )
-  THEN ( [a] a+4 cfa ) DUP (LIT) =
-   IF DROP ."  (LIT)" ( [a] a+4 )
+  THEN ( [a] a+4 cfa ) DUP DOLIT =
+   IF DROP ."  DOLIT" ( [a] a+4 )
     CR DUP A. DUP_2+_SWAP_I@ 5 H.R ( [a] a+6 )
-   ELSE ( [a] a+4 cfa ) DUP (.") = DUP
-    IF ."  (." Q ." )"
-    THEN OVER (ABORT") =  DUP
-    IF ."  (ABORT" Q ." )"
-    THEN OR OVER ($") =  DUP
-    IF ."  ($" Q ." )"
+   ELSE ( [a] a+4 cfa ) DUP DOTQP = DUP
+    IF ."  DOTQP"
+    THEN OVER ABORQ =  DUP
+    IF ."  ABORQ"
+    THEN OR OVER STRQP =  DUP
+    IF ."  STRQP"
     THEN OR
     IF DROP DUP DUP IC@ ( [a] a+4 a+4 n ) 2+ 2/ 1- ( [a] a+4 a+4 c )
        FOR CR DUP A. DUP_2+_SWAP_I@ 5 H.R
        NEXT DROP ( [a] a+4 )
        .STR ( [a] a' )
-    ELSE ( [a] a+4 cfa ) DUP (ZBRAN) =
-     IF DROP ."  (ZBRAN)" .BRAN
-     ELSE ( [a] a+4 cfa ) DUP (BRAN) =
-      IF DROP ."  (BRAN)" .BRAN
-      ELSE ( [a] a+4 cfa ) DUP (NEXT) =
-       IF DROP ."  (NEXT)" .BRAN
+    ELSE ( [a] a+4 cfa ) DUP QBRAN =
+     IF DROP ."  QBRAN" .BRAN
+     ELSE ( [a] a+4 cfa ) DUP BRAN =
+      IF DROP ."  BRAN" .BRAN
+      ELSE ( [a] a+4 cfa ) DUP DONXT =
+       IF DROP ."  DONXT" .BRAN
        ELSE DROP ( [a] a+4 )
        THEN
       THEN
@@ -234,6 +214,7 @@ CREATE LIMIT 2 ALLOT FLUSH
 : RADR> ( [a] -- cfa ) $FFF AND DUP $800 AND
    IF $F000 OR 
    THEN 2* OVER + ; 
+\ Forget .INS
 : .INS ( a -- a' f )
   DUP CR A. ( a )
   DUP_2+_SWAP_I@ ( a+2 [a] )
@@ -245,9 +226,9 @@ CREATE LIMIT 2 ALLOT FLUSH
   THEN OR
   IF ( a+2 [a] )
      SWAP DUP_2+_SWAP_I@ ( [a] a+4 [a+2] ) DUP 5 H.R
-     ADR> ( [a] a+4 cfa ) DUP (CON) =
+     ADR> ( [a] a+4 cfa ) DUP DOVAR =
      IF DROP DUP_2+_SWAP_I@ DUP 5 H.R ( [a] a+6 [a+4] )
-        ."  (CON)" . SWAP EXIT ( a+6 [a] )
+        ."  DOCON" . SWAP EXIT ( a+6 [a] )
      THEN .NAME ( [a] a' )
      SWAP JMP? ( a' f )
   ELSE ( a+2 [a] ) DUP RCALL? DUP
@@ -257,9 +238,9 @@ CREATE LIMIT 2 ALLOT FLUSH
      THEN OR
      IF ( a+2 [a] )
         SWAP OVER ( [a] a+2 [a] )
-        RADR> ( [a] a+2 cfa ) DUP (CON) =
+        RADR> ( [a] a+2 cfa ) DUP DOVAR =
         IF DROP DUP_2+_SWAP_I@ DUP 5 H.R ( [a] a+6 [a+4] )
-           ."  (CON)" . SWAP EXIT ( a+6 [a] )
+           ."  DOVAR" . SWAP EXIT ( a+6 [a] )
         THEN ( [a] a+2 cfa ) DUP 2/ . .NAME ( [a] a' ) SWAP RJMP?
      ELSE ( a+2 [a] ) RET? DUP
         IF 6 SPACES ." RET"
@@ -285,7 +266,7 @@ CREATE LIMIT 2 ALLOT FLUSH
  BEGIN .INS ( a f )
    IF LIMIT @ OVER 2/ <
    ELSE 0
-   THEN KEY 1B = OR
+   THEN \ KEY 1B = OR
  UNTIL CR A. ; 
 : SEE ' DUP >NAME IC@ DUP C0 AND
   IF CR
@@ -498,7 +479,7 @@ THEN
  ;
 : SEALED CR ." ERROR#01 : 禁止移除系統字!" CR  ; \ MAO
 : CALL DUP ; \ MAKEING A HEAD TO CALL I! 
-
+REMEMBER
 ' I! 1E + I@ ' CALL 2+ I! FLUSH   \ MAKE TEMP  I! 
 ' SEALED 1+ ' FORGET  C + I! \ MAO CHANGE FFFF TO  SEALED ADDRESS
 ' SEALED 2/ ' FORGET CA + I! \ MAO SHOW SEALED MESSAGE CHANGE CR
