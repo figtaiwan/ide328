@@ -13,9 +13,8 @@ FLUSH
 \ 本檔案為毛翔先生2012/8/23於德霖技術學院202實驗室創作。
 HEX
 \ ==============DEFINE =======================
-: STOP
-\ 查無此字且無法譯為數值時，忽視後續字元，直至 ESC 鍵。
-\ 此處置之目的為防止後續不當之執行會導致系統損壞(經常發生)。
+: STOP \ 查無此字且無法譯為數值時，忽視後續字元，直至 ESC 鍵。
+       \ 此處置之目的為防止後續不當之執行會導致系統損壞(經常發生)。
        
  CR
  ." ERROR#02 : 編譯錯誤 ! 請按 ESC 繼續 " 
@@ -25,9 +24,8 @@ HEX
   1B = 
  UNTIL ; FLUSH
 
-: WAIT
-\ 允許使用者在開機前五秒內，按任意鍵強迫進符式系統(直譯模式)
-\ 此處置之目的為允許有TURNKEY時，仍能取回系統控制權。 
+: WAIT \ 允許使用者在開機前五秒內，按任意鍵強迫進符式系統(直譯模式)
+       \ 此處置之目的為允許有TURNKEY時，仍能取回系統控制權。 
 CR
 ." 2秒內按任意鍵可進入符式系統 "
 2
@@ -108,10 +106,10 @@ VARIABLE #OUT FLUSH
  ICOUNT ( nfa+1 {nfa} )
  1F AND SPACE ITYPE ; 
 : >LINK ( nfa -- lfa ) 2- ; 
-\ : words CR CONTEXT @ \ MYWORDS
-\   BEGIN ?DUP
-\   WHILE DUP .ID >LINK I@
-\   REPEAT ; 
+: words CR CONTEXT @ \ MYWORDS
+ BEGIN ?DUP
+ WHILE DUP .ID >LINK I@
+ REPEAT ; 
 : .CELL ( a -- a+2 ) \ show code at address a
  DUP I@ . 2+ ; 
 : .CODES ( cfa -- )
@@ -169,8 +167,8 @@ CREATE LIMIT 2 ALLOT FLUSH
 : A. ( a -- ) 2/ <# # # # # # # #> TYPE ;
 : H.R ( v n -- ) >R <# #S #> R> OVER - SPACES TYPE ;
 : Q 22 EMIT ;
-: .STR ( a -- a' ) 6 SPACES
-  ." .DB" ICOUNT DUP . ." ,'" 2DUP ITYPE ." '" + ALIGNED ;
+: .STR ( a -- a' )
+  6 SPACES ." .DB" ICOUNT DUP . ." ,'" 2DUP ITYPE ." '" + ALIGNED ; 
 : .BRAN ( a -- a+2 )
   CR DUP A. DUP_2+_SWAP_I@ ( a+2 [a] )
   DUP 5 H.R LIMIT @ MAX LIMIT ! ; \ Forget .NAME
@@ -190,8 +188,7 @@ CREATE LIMIT 2 ALLOT FLUSH
     THEN OR OVER STRQP =  DUP
     IF ."  STRQP"
     THEN OR
-    IF DROP DUP DUP IC@ ( [a] a+4 a+4 n )
-       2+ 2/ 1- ( [a] a+4 a+4 c )
+    IF DROP DUP DUP IC@ ( [a] a+4 a+4 n ) 2+ 2/ 1- ( [a] a+4 a+4 c )
        FOR CR DUP A. DUP_2+_SWAP_I@ 5 H.R
        NEXT DROP ( [a] a+4 )
        .STR ( [a] a' )
@@ -244,8 +241,7 @@ CREATE LIMIT 2 ALLOT FLUSH
         RADR> ( [a] a+2 cfa ) DUP DOVAR =
         IF DROP DUP_2+_SWAP_I@ DUP 5 H.R ( [a] a+6 [a+4] )
            ."  DOVAR" . SWAP EXIT ( a+6 [a] )
-        THEN ( [a] a+2 cfa ) DUP 2/ . .NAME
-        ( [a] a' ) SWAP RJMP?
+        THEN ( [a] a+2 cfa ) DUP 2/ . .NAME ( [a] a' ) SWAP RJMP?
      ELSE ( a+2 [a] ) RET? DUP
         IF 6 SPACES ." RET"
         THEN
@@ -334,29 +330,20 @@ $44 CONSTANT TCCR0A \ Timer/Counter Control Register A
 $45 CONSTANT TCCR0B \ Timer/Counter Control Register B
 $47 CONSTANT OCR0A  \ Output Compare Register A
 $48 CONSTANT OCR0B  \ Output Compare Register B
-: MS ( 毫秒數 -- )
-  ?DUP IF FOR AFT $1CB FOR NEXT THEN NEXT THEN ;
-: PD6_PWM ( 輸出量 -- ) OCR0A C! TCCR0A C@ $83  OR
-  TCCR0A C! 3 TCCR0B C! ;
+: MS ( 毫秒數 -- ) ?DUP IF FOR AFT $1CB FOR NEXT THEN NEXT THEN ;
+: PD6_PWM ( 輸出量 -- ) OCR0A C! TCCR0A C@ $83  OR TCCR0A C! 3 TCCR0B C! ;
 \ 0 <= 輸出量 <= 255
-: PD5_PWM ( 輸出量 -- ) OCR0B C! TCCR0A C@ $23  OR
-  TCCR0A C! 3 TCCR0B C! ;
+: PD5_PWM ( 輸出量 -- ) OCR0B C! TCCR0A C@ $23  OR TCCR0A C! 3 TCCR0B C! ;
 \ 0 <= 輸出量 <= 255
 : PWM_CLOCK_SELECT ( n -- ) TCCR0B C! ; \ 1-5 CLOCK LEVEL
 
 : PD6_PWM_IO ( FLAG -- )
-  IF   TCCR0A C@ $83 OR  TCCR0A C!
-  ELSE TCCR0A C@ $7F AND TCCR0A C!
-  THEN ; 
-\ PWM 開關
-\ FLAG=TRUE 開 80 COM0A 模式 03 FAST PWM, FLAG=FALSE 關 80
+  IF TCCR0A C@ $83 OR TCCR0A C! ELSE TCCR0A C@ $7F AND TCCR0A C! THEN ; 
+\ PWM 開關 ( FLAG=TRUE 開 80 COM0A 模式 03 FAST PWM, FLAG=FALSE 關 80 )
 
 : PD5_PWM_IO ( FLAG -- )
-  IF   TCCR0A C@ $23 OR  TCCR0A C!
-  ELSE TCCR0A C@ $DF AND TCCR0A C!
-  THEN ;
-\ PWM 開關
-\ FLAG=TRUE 開 20 COM0B 模式 03 FAST PWM, FLAG=FALSE 關 20
+  IF TCCR0A C@ $23 OR TCCR0A C! ELSE TCCR0A C@ $DF AND TCCR0A C! THEN ;
+\ PWM 開關 ( FLAG=TRUE 開 20 COM0B 模式 03 FAST PWM, FLAG=FALSE 關 20 )
 
 : AREFOFF   00 OR ;
 : AFRAVCC   40 OR ;
@@ -419,10 +406,9 @@ VARIABLE TEMP
 : IDUMP BASE @ >R HEX 
 ( add -- )DUP ( add add ) 0 TEMP ! 
 \ 印出 2    4    6    8    A    C    E 
- CR 8 SPACES 7 FOR  DUP 000F AND  5 .R 2+ NEXT DROP ( add )
+ CR 8 SPACES 7 FOR  DUP 000F AND  5 .R 2+ NEXT DROP ( add ) \ 
 \ 印出 EF0123456789ABCD
-\ DUP  1- 2 SPACES F
-\ FOR  DUP 000F AND -1 .R 1+ NEXT DROP ( add )
+\ DUP  1- 2 SPACES F FOR  DUP 000F AND -1 .R 1+ NEXT DROP ( add ) 
  CR  7 
 FOR  DUP >R ( ADD ) 
 \ 印出 3330=> 外迴圈
@@ -435,8 +421,7 @@ FOR  DUP >R ( ADD )
 \ 印出   ____=_a中文字_串測  
  R> TEMP @
  IF 1+ 5F EMIT THEN
-\ 檢查中文到換行時 中文 ASCII LOW BYTE 是否重複
-\ 如重複則印出空白
+\ 檢查中文到換行時 中文 ASCII LOW BYTE 是否重複，如重複則印出空白
    F  FOR DUP  IC@ ( ADD' ADD" C )  
          DUP 20 7E WITHIN 
          IF  EMIT   
@@ -457,10 +442,9 @@ HEX
 : DUMP BASE @ >R HEX 
 ( add -- )DUP ( add add ) 0 TEMP ! 
 \ 印出 2    4    6    8    A    C    E 
- CR 8 SPACES 7 FOR  DUP 000F AND  5 .R 2+ NEXT DROP ( add )
+ CR 8 SPACES 7 FOR  DUP 000F AND  5 .R 2+ NEXT DROP ( add ) \ 
 \ 印出 EF0123456789ABCD
-\ DUP  1- 2 SPACES F
-\ FOR  DUP 000F AND -1 .R 1+ NEXT DROP ( add ) 
+\ DUP  1- 2 SPACES F FOR  DUP 000F AND -1 .R 1+ NEXT DROP ( add ) 
  CR  7 
 FOR  DUP >R ( ADD ) 
 \ 印出 3330=> 外迴圈
@@ -472,8 +456,7 @@ FOR  DUP >R ( ADD )
 \ 印出   ____=_a中文字_串測  
  R> TEMP @
  IF 1+ 5F EMIT THEN
-\ 檢查中文到換行時 中文 ASCII LOW BYTE 是否重複
-\ 如重複則印出空白
+\ 檢查中文到換行時 中文 ASCII LOW BYTE 是否重複，如重複則印出空白
    F  FOR DUP  C@ ( ADD' ADD" C )  
          DUP 20 7E WITHIN 
          IF  EMIT   
@@ -487,7 +470,7 @@ FOR  DUP >R ( ADD )
 NEXT DROP R> BASE !  ; 
 
 : I! ( n addr -- ) 
-DUP DUP 1- 200 WITHIN \ MAO SECOND DUP AND 1+ WILL BE CHANGE
+DUP DUP 1-  200 WITHIN   \ MAO SECOND DUP AND 1+ WILL BE CHANGE 
 IF \ MAO
 I!
 ELSE  \ MAO
@@ -498,10 +481,8 @@ THEN
 : CALL DUP ; \ MAKEING A HEAD TO CALL I! 
 REMEMBER
 ' I! 1E + I@ ' CALL 2+ I! FLUSH   \ MAKE TEMP  I! 
-' SEALED 1+ ' FORGET  C + I!
-\ MAO CHANGE FFFF TO  SEALED ADDRESS
-' SEALED 2/ ' FORGET CA + I!
-\ MAO SHOW SEALED MESSAGE CHANGE CR
+' SEALED 1+ ' FORGET  C + I! \ MAO CHANGE FFFF TO  SEALED ADDRESS
+' SEALED 2/ ' FORGET CA + I! \ MAO SHOW SEALED MESSAGE CHANGE CR
 ' CP 2/ ' I! 6 + CALL \ LOCK I!
 '  @ 2/ ' I! A + CALL \ LOCK I! 
  FLUSH 
